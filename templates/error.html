@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error - Watch & Earn</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            padding: 1rem;
+        }
+
+        .error-container {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .error-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, #ff6b6b, #ee5a24, #ff9ff3);
+        }
+
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #ff6b6b;
+            margin: 0 auto 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: shake 0.8s ease-in-out;
+        }
+
+        .error-icon svg {
+            width: 40px;
+            height: 40px;
+            fill: white;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        .error-code {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #ff6b6b;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .error-title {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .error-message {
+            font-size: 1.1rem;
+            color: #666;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 2rem;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            color: white;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #666;
+            border: 2px solid #ddd;
+        }
+
+        .btn-outline:hover {
+            background: #f5f5f5;
+            border-color: #bbb;
+        }
+
+        .error-details {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            border-left: 4px solid #ff6b6b;
+            text-align: left;
+        }
+
+        .error-details h3 {
+            color: #ff6b6b;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .error-details ul {
+            color: #666;
+            line-height: 1.6;
+            padding-left: 1.2rem;
+        }
+
+        .error-details li {
+            margin-bottom: 0.5rem;
+        }
+
+        .contact-info {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+            font-size: 0.9rem;
+            color: #888;
+        }
+
+        .error-type-selector {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 10px;
+            padding: 1rem;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .error-type-selector select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 600px) {
+            .error-container {
+                padding: 2rem;
+                margin: 1rem;
+            }
+            
+            .error-code {
+                font-size: 3rem;
+            }
+            
+            .error-title {
+                font-size: 1.4rem;
+            }
+            
+            .error-actions {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .btn {
+                width: 100%;
+                max-width: 250px;
+            }
+
+            .error-type-selector {
+                position: static;
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Error Type Selector for Demo -->
+    <div class="error-type-selector">
+        <select id="errorTypeSelector" onchange="changeErrorType()">
+            <option value="404">404 - Page Not Found</option>
+            <option value="500">500 - Server Error</option>
+            <option value="403">403 - Access Denied</option>
+            <option value="network">Network Error</option>
+            <option value="registration">Registration Error</option>
+            <option value="login">Login Error</option>
+            <option value="verification">Email Verification Error</option>
+            <option value="maintenance">Site Maintenance</option>
+        </select>
+    </div>
+
+    <div class="error-container">
+        <div class="error-icon" id="errorIcon">
+            <svg viewBox="0 0 24 24" id="errorSvg">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+        </div>
+        
+        <div class="error-code" id="errorCode">404</div>
+        <h1 class="error-title" id="errorTitle">Page Not Found</h1>
+        
+        <p class="error-message" id="errorMessage">
+            Oops! The page you're looking for doesn't exist. It might have been moved, deleted, or the URL might be incorrect.
+        </p>
+        
+        <div class="error-actions" id="errorActions">
+            <a href="index.html" class="btn btn-primary">Go Home</a>
+            <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+            <a href="contact.html" class="btn btn-outline">Contact Support</a>
+        </div>
+        
+        <div class="error-details" id="errorDetails">
+            <h3>What can you do?</h3>
+            <ul>
+                <li>Check the URL for typos</li>
+                <li>Use the navigation menu to find what you're looking for</li>
+                <li>Go back to the previous page</li>
+                <li>Contact our support team if the problem persists</li>
+            </ul>
+        </div>
+        
+        <div class="contact-info">
+            <p>Need help? Contact us at <strong>support@watchearn.com</strong> or call <strong>+1 (555) 123-4567</strong></p>
+        </div>
+    </div>
+
+    <script>
+        const errorTemplates = {
+            404: {
+                code: '404',
+                title: 'Page Not Found',
+                message: "Oops! The page you're looking for doesn't exist. It might have been moved, deleted, or the URL might be incorrect.",
+                icon: '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>',
+                actions: [
+                    { text: 'Go Home', href: 'index.html', class: 'btn-primary' },
+                    { text: 'Go Back', href: 'javascript:history.back()', class: 'btn-secondary' },
+                    { text: 'Contact Support', href: 'contact.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'What can you do?',
+                    items: [
+                        'Check the URL for typos',
+                        'Use the navigation menu to find what you\'re looking for',
+                        'Go back to the previous page',
+                        'Contact our support team if the problem persists'
+                    ]
+                }
+            },
+            500: {
+                code: '500',
+                title: 'Internal Server Error',
+                message: "Something went wrong on our end. Our team has been notified and is working to fix this issue. Please try again later.",
+                icon: '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>',
+                actions: [
+                    { text: 'Try Again', href: 'javascript:location.reload()', class: 'btn-primary' },
+                    { text: 'Go Home', href: 'index.html', class: 'btn-secondary' },
+                    { text: 'Report Issue', href: 'contact.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'What happened?',
+                    items: [
+                        'Our servers encountered an unexpected error',
+                        'The issue has been automatically reported to our team',
+                        'Try refreshing the page or come back later',
+                        'If the problem persists, please contact support'
+                    ]
+                }
+            },
+            403: {
+                code: '403',
+                title: 'Access Denied',
+                message: "You don't have permission to access this resource. Please check your account status or contact support for assistance.",
+                icon: '<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z"/>',
+                actions: [
+                    { text: 'Login', href: 'login.html', class: 'btn-primary' },
+                    { text: 'Go Home', href: 'index.html', class: 'btn-secondary' },
+                    { text: 'Contact Support', href: 'contact.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'Possible reasons:',
+                    items: [
+                        'You need to log in to access this content',
+                        'Your account doesn\'t have the required permissions',
+                        'This content is restricted to premium users',
+                        'Your session may have expired'
+                    ]
+                }
+            },
+            network: {
+                code: 'X',
+                title: 'Network Connection Error',
+                message: "Unable to connect to our servers. Please check your internet connection and try again.",
+                icon: '<path d="M24.24 8l1.28-1.28c.38-.38.38-.98 0-1.36s-.98-.38-1.36 0L22.88 6.64c-3.51-3.51-9.21-3.51-12.72 0L8.88 5.36c-.38-.38-.98-.38-1.36 0s-.38.98 0 1.36L8.8 8l-1.28 1.28c-.38.38-.38.98 0 1.36s.98.38 1.36 0L10.16 9.36c2.73-2.73 7.15-2.73 9.88 0l1.28 1.28c.38.38.98.38 1.36 0s.38-.98 0-1.36L24.24 8z"/>',
+                actions: [
+                    { text: 'Retry', href: 'javascript:location.reload()', class: 'btn-primary' },
+                    { text: 'Check Connection', href: '#', class: 'btn-secondary', onclick: 'checkConnection()' },
+                    { text: 'Go Offline Mode', href: 'offline.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'Troubleshooting steps:',
+                    items: [
+                        'Check your internet connection',
+                        'Try refreshing the page',
+                        'Disable VPN if you\'re using one',
+                        'Clear your browser cache and cookies'
+                    ]
+                }
+            },
+            registration: {
+                code: '!',
+                title: 'Registration Failed',
+                message: "We couldn't create your account. Please check your information and try again.",
+                icon: '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>',
+                actions: [
+                    { text: 'Try Again', href: 'register.html', class: 'btn-primary' },
+                    { text: 'Login Instead', href: 'login.html', class: 'btn-secondary' },
+                    { text: 'Get Help', href: 'contact.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'Common issues:',
+                    items: [
+                        'Email address is already registered',
+                        'Password doesn\'t meet requirements',
+                        'Required fields are missing',
+                        'Invalid email format'
+                    ]
+                }
+            },
+            login: {
+                code: '!',
+                title: 'Login Failed',
+                message: "We couldn't log you in. Please check your credentials and try again.",
+                icon: '<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6z"/>',
+                actions: [
+                    { text: 'Try Again', href: 'login.html', class: 'btn-primary' },
+                    { text: 'Forgot Password?', href: 'forgot-password.html', class: 'btn-secondary' },
+                    { text: 'Create Account', href: 'register.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'Common issues:',
+                    items: [
+                        'Incorrect email or password',
+                        'Account not verified yet',
+                        'Account has been suspended',
+                        'Too many failed login attempts'
+                    ]
+                }
+            },
+            verification: {
+                code: '✉',
+                title: 'Email Verification Failed',
+                message: "We couldn't verify your email address. The verification link may have expired or is invalid.",
+                icon: '<path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>',
+                actions: [
+                    { text: 'Resend Email', href: 'resend-verification.html', class: 'btn-primary' },
+                    { text: 'Update Email', href: 'update-email.html', class: 'btn-secondary' },
+                    { text: 'Contact Support', href: 'contact.html', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'What went wrong?',
+                    items: [
+                        'Verification link has expired (links expire after 24 hours)',
+                        'Link has already been used',
+                        'Email address was typed incorrectly',
+                        'Email was marked as spam'
+                    ]
+                }
+            },
+            maintenance: {
+                code: '🔧',
+                title: 'Site Under Maintenance',
+                message: "We're currently performing scheduled maintenance to improve your experience. We'll be back online shortly.",
+                icon: '<path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/>',
+                actions: [
+                    { text: 'Refresh Page', href: 'javascript:location.reload()', class: 'btn-primary' },
+                    { text: 'Check Status', href: 'status.html', class: 'btn-secondary' },
+                    { text: 'Follow Updates', href: 'https://twitter.com/watchearn', class: 'btn-outline' }
+                ],
+                details: {
+                    title: 'What\'s happening?',
+                    items: [
+                        'We\'re upgrading our servers for better performance',
+                        'Adding new features to enhance your experience',
+                        'Performing security updates',
+                        'Expected downtime: 30-60 minutes'
+                    ]
+                }
+            }
+        };
+
+        function changeErrorType() {
+            const selector = document.getElementById('errorTypeSelector');
+            const errorType = selector.value;
+            const template = errorTemplates[errorType];
+            
+            if (template) {
+                // Update error content
+                document.getElementById('errorCode').textContent = template.code;
+                document.getElementById('errorTitle').textContent = template.title;
+                document.getElementById('errorMessage').textContent = template.message;
+                document.getElementById('errorSvg').innerHTML = template.icon;
+                
+                // Update actions
+                const actionsContainer = document.getElementById('errorActions');
+                actionsContainer.innerHTML = '';
+                template.actions.forEach(action => {
+                    const link = document.createElement('a');
+                    link.href = action.href;
+                    link.className = `btn ${action.class}`;
+                    link.textContent = action.text;
+                    if (action.onclick) {
+                        link.setAttribute('onclick', action.onclick);
+                    }
+                    actionsContainer.appendChild(link);
+                });
+                
+                // Update details
+                const detailsContainer = document.getElementById('errorDetails');
+                detailsContainer.innerHTML = `
+                    <h3>${template.details.title}</h3>
+                    <ul>
+                        ${template.details.items.map(item => `<li>${item}</li>`).join('')}
+                    </ul>
+                `;
+                
+                // Update page title
+                document.title = `${template.title} - Watch & Earn`;
+            }
+        }
+
+        function checkConnection() {
+            if (navigator.onLine) {
+                alert('Your internet connection appears to be working. The issue might be with our servers.');
+            } else {
+                alert('You appear to be offline. Please check your internet connection.');
+            }
+        }
+
+        // Animate error icon on load
+        window.addEventListener('load', () => {
+            const errorIcon = document.getElementById('errorIcon');
+            setTimeout(() => {
+                errorIcon.style.transform = 'scale(1.1)';
+                setTimeout(() => {
+                    errorIcon.style.transform = 'scale(1)';
+                }, 200);
+            }, 500);
+        });
+    </script>
+</body>
+</html>
