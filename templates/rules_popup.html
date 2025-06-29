@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>📜 Reward Rules</title>
+  <style>
+    :root {
+      --primary-color: #004466;
+      --accent-color: #00aa66;
+      --light-bg: #f0f4ff;
+      --white: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to right, var(--light-bg), #dbeeff);
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background-color: var(--primary-color);
+      color: var(--white);
+      padding: 1rem;
+      text-align: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    main {
+      padding: 1.5rem;
+      max-width: 700px;
+      margin: auto;
+    }
+    h2 {
+      text-align: center;
+      color: var(--primary-color);
+      font-size: 1.6rem;
+      margin-bottom: 1.2rem;
+    }
+    .rule-card {
+      background: var(--white);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      font-size: 1rem;
+    }
+    .alert-info {
+      background-color: #d9ecff;
+      color: #004080;
+      padding: 1rem;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    .btn {
+      display: inline-block;
+      background: var(--primary-color);
+      color: var(--white);
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.95rem;
+      text-decoration: none;
+      margin-top: 20px;
+    }
+    .text-center {
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📋 Reward Rules</h1>
+  </header>
+
+  <main>
+    {% if rules %}
+      {% for rule in rules %}
+        <div class="rule-card">{{ rule }}</div>
+      {% endfor %}
+    {% else %}
+      <div class="alert-info text-center">
+        No reward rules available right now.
+      </div>
+    {% endif %}
+
+    <div class="text-center">
+      <a href="{{ url_for('index') }}" class="btn">🏠 Continue to Home</a>
+    </div>
+  </main>
+</body>
+</html>
