@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Profile – Watch & Earn</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f1f1f1;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 30px;
+      box-shadow: 0 0 12px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #004466;
+    }
+    .info-group {
+      margin: 15px 0;
+      font-size: 1.1rem;
+    }
+    .info-label {
+      font-weight: bold;
+      color: #444;
+    }
+    .balance-box {
+      background: #004466;
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-weight: bold;
+      text-align: center;
+      margin: 20px 0;
+    }
+    .action-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 15px;
+      margin: 25px 0;
+    }
+    .action-links a {
+      background: #007BFF;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    .action-links a:hover {
+      background: #005ecb;
+    }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      padding: 15px;
+      background-color: #004466;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>👤 My Profile</h1>
+
+    <div class="info-group">
+      <span class="info-label">Full Name:</span> {{ user.name or 'N/A' }}
+    </div>
+
+    <div class="info-group">
+      <span class="info-label">Email:</span> {{ user.email }}
+    </div>
+
+    <div class="info-group">
+      <span class="info-label">Account Type:</span> {{ user.account_type }}
+    </div>
+
+    <div class="balance-box">
+      💰 Current Balance: ${{ '%.2f' % user.balance if user.balance is defined else '0.00' }}
+    </div>
+
+    <div class="action-links">
+      <a href="{{ url_for('withdraw') }}">💵 Withdraw</a>
+      <a href="{{ url_for('rules_popup') }}">📜 View Reward Rules</a>
+      <a href="{{ url_for('edit_profile') }}">✏️ Edit Profile</a>
+      <a href="{{ url_for('logout') }}">🚪 Logout</a>
+    </div>
+  </div>
+
+  <footer>
+    &copy; 2025 Watch & Earn. All rights reserved.
+  </footer>
+
+</body>
+</html>
