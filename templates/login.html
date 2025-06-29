@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login – Watch & Earn</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f3f3f3;
+      padding: 20px;
+    }
+    .login-container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    h2 {
+      text-align: center;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #007BFF;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+    .link {
+      font-size: 0.9rem;
+      text-align: center;
+      margin-top: 10px;
+    }
+    .link a {
+      color: #007BFF;
+      text-decoration: none;
+    }
+    .link a:hover {
+      text-decoration: underline;
+    }
+    .error-message {
+      background-color: #f8d7da;
+      color: #721c24;
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+      border: 1px solid #f5c6cb;
+      display: none;
+    }
+    .success-message {
+      background-color: #d4edda;
+      color: #155724;
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+      border: 1px solid #c3e6cb;
+      display: none;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      margin: 10px 0;
+      color: #007BFF;
+    }
+    .password-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .password-container input {
+      padding-right: 40px;
+    }
+    .toggle-password {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      width: auto;
+      margin: 0;
+      font-size: 0.9rem;
+      color: #007BFF;
+      user-select: none;
+    }
+    .toggle-password:hover {
+      color: #0056b3;
+      background: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <h2>🎥 Sign in to Watch & Earn</h2>
+
+    <div id="error-message" class="error-message"></div>
+    <div id="success-message" class="success-message"></div>
+    <div id="loading" class="loading">Logging in...</div>
+
+    <form id="login-form" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label for="email">Email:</label>
+      <input type="email" name="email" id="email" required>
+
+      <label for="password">Password:</label>
+      <div class="password-container">
+        <input type="password" name="password" id="password" required>
+        <button type="button" class="toggle-password" id="toggle-password">👁️</button>
+      </div>
+
+      <button type="submit" id="login-btn">Login</button>
+    </form>
+
+    <div class="link"><a href="/register">Don't have an account? Register here</a></div>
+    <div class="link"><a href="/forgot_password">Forgot password?</a></div>
+    <div class="link"><a href="/terms">Terms & Conditions</a></div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const loginForm = document.getElementById('login-form');
+      const loginBtn = document.getElementById('login-btn');
+      const errorMessage = document.getElementById('error-message');
+      const successMessage = document.getElementById('success-message');
+      const loading = document.getElementById('loading');
+      const passwordInput = document.getElementById('password');
+      const togglePassword = document.getElementById('toggle-password');
+      let passwordVisible = false;
+
+      // Toggle password visibility
+      togglePassword.addEventListener('click', function() {
+        passwordVisible = !passwordVisible;
+        
+        if (passwordVisible) {
+          passwordInput.type = 'text';
+          togglePassword.textContent = '🙈';
+          togglePassword.title = 'Hide password';
+        } else {
+          passwordInput.type = 'password';
+          togglePassword.textContent = '👁️';
+          togglePassword.title = 'Show password';
+        }
+      });
+
+      // Function to show error message
+      function showError(message) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        successMessage.style.display = 'none';
+        loading.style.display = 'none';
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Login';
+      }
+
+      // Function to show success message
+      function showSuccess(message) {
+        successMessage.textContent = message;
+        successMessage.style.display = 'block';
+        errorMessage.style.display = 'none';
+      }
+
+      // Function to hide all messages
+      function hideMessages() {
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+      }
+
+      loginForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Hide previous messages and show loading
+        hideMessages();
+        loading.style.display = 'block';
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Logging in...';
+        
+        const formData = new FormData(this);
+        
+        try {
+          const response = await fetch('/login', {
+            method: 'POST',
+            body: formData
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            // Show success message
+            showSuccess(data.message || 'Login successful!');
+            
+            // Redirect after a short delay
+            setTimeout(() => {
+              window.location.href = data.redirect;
+            }, 1000);
+            
+          } else {
+            // Show error message
+            showError(data.error || 'Login failed. Please try again.');
+            
+            // Special handling for email verification
+            if (data.needs_verification) {
+              // You can add a link to resend verification email here if needed
+              errorMessage.innerHTML = data.error + ' <a href="/resend_verification">Resend verification email</a>';
+            }
+          }
+          
+        } catch (error) {
+          console.error('Login error:', error);
+          showError('An error occurred during login. Please try again.');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
