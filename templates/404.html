@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>404 - Page Not Found</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #fcebea;
+      color: #d32f2f;
+      text-align: center;
+      padding: 80px 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    p {
+      font-size: 18px;
+    }
+    a {
+      color: #1976d2;
+      text-decoration: none;
+      font-weight: bold;
+      display: inline-block;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>❌ 404</h1>
+    <p>Oops! The page you're looking for doesn't exist.</p>
+    <a href="{{ url_for('user_dashboard') if session.get('account_type') == 'User' else url_for('youtuber_dashboard') }}">🔙 Go Back to Dashboard</a>
+  </div>
+
+</body>
+</html>
