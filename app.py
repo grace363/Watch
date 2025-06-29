@@ -932,20 +932,405 @@ def claim_daily_bonus():
         db.session.rollback()
         return jsonify({'error': 'Failed to claim bonus'}), 500
 
+# Add these routes to your existing app.py file
+
 @app.route('/youtuber_dashboard')
 def youtuber_dashboard():
-    if 'user_id' not in session or session.get('account_type') != 'YouTuber':
+    """YouTuber dashboard route"""
+    if 'user_id' not in session:
+        flash('Please log in to access your dashboard.', 'error')
         return redirect(url_for('login'))
     
     user = User.query.get(session['user_id'])
-    if not user:
+    if not user or user.account_type != 'YouTuber':
+        flash('Access denied. YouTuber account required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Check if user is banned
+    if is_user_banned(user.id):
+        flash(f'Your account has been banned. Reason: {user.ban_reason}', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get user's videos
+        user_videos = Video.query.filter_by(added_by=user.id).order_by(Video.timestamp.desc()).all()
+        
+        # Calculate total watches across all user's videos
+        total_watches = db.session.query(WatchSession).join(Video).filter(
+            Video.added_by == user.id,
+            WatchSession.reward_given == True
+        ).count()
+        
+        # Calculate total revenue from user's videos
+        total_revenue = db.session.query(db.func.sum(Earning.amount)).join(Video).filter(
+            Video.added_by == user.id,
+            Earning.source == 'watch'
+        ).scalar() or 0.0
+        
+        # Count active videos
+        active_videos = Video.query.filter_by(added_by=user.id, is_active=True).count()
+        
+        # Get recent watch sessions for user's videos
+        recent_watches = db.session.query(WatchSession).join(Video).filter(
+            Video.added_by == user.id,
+            WatchSession.reward_given == True
+        ).order_by(WatchSession.start_time.desc()).limit(5).all()
+        
+        return render_template('youtuber_dashboard.html',
+                             user=user,
+                             user_videos=user_videos,
+                             total_watches=total_watches,
+                             total_revenue=total_revenue,
+                             active_videos=active_videos,
+                             recent_watches=recent_watches,
+                             VIDEO_WATCH_TIME=VIDEO_WATCH_TIME,
+                             VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
+                             
+    except Exception as e:
+        print(f"❌ Error in youtuber_dashboard: {str(e)}")
+        flash('An error occurred while loading your dashboard.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/add_video', methods=['POST'])
+@limiter.limit("10 per minute")
+def add_video():
+    """Add new video route"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        # Get form data
+        title = request.form.get('title', '').strip()
+        video_url = request.form.get('video_url', '').strip()
+        min_watch_time = int(request.form.get('min_watch_time', VIDEO_WATCH_TIME))
+        reward_amount = float(request.form.get('reward_amount', VIDEO_REWARD_AMOUNT))
+        
+        # Validation
+        if not title or len(title) > 200:
+            flash('Video title is required and must be less than 200 characters.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        if not video_url:
+            flash('Video URL is required.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Validate YouTube URL
+        if 'youtube.com/watch' not in video_url and 'youtu.be/' not in video_url:
+            flash('Please provide a valid YouTube video URL.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Validate watch time and reward
+        if min_watch_time < 10 or min_watch_time > 300:
+            flash('Watch time must be between 10 and 300 seconds.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        if reward_amount < 0.001 or reward_amount > 1.0:
+            flash('Reward amount must be between $0.001 and $1.000.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Check for duplicate URLs
+        existing_video = Video.query.filter_by(video_url=video_url).first()
+        if existing_video:
+            flash('This video URL has already been added.', 'warning')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Create new video
+        new_video = Video(
+            title=title,
+            video_url=video_url,
+            added_by=user.id,
+            min_watch_time=min_watch_time,
+            reward_amount=reward_amount,
+            is_active=True,
+            timestamp=datetime.utcnow()
+        )
+        
+        db.session.add(new_video)
+        db.session.commit()
+        
+        # Log the action
+        log_user_ip(user.id, "video_upload")
+        
+        flash(f'Video "{title}" has been added successfully!', 'success')
+        return redirect(url_for('youtuber_dashboard'))
+        
+    except ValueError as e:
+        flash('Invalid number format in watch time or reward amount.', 'error')
+        return redirect(url_for('youtuber_dashboard'))
+    except Exception as e:
+        print(f"❌ Error adding video: {str(e)}")
+        db.session.rollback()
+        flash('An error occurred while adding the video. Please try again.', 'error')
+        return redirect(url_for('youtuber_dashboard'))
+
+@app.route('/toggle_video_status', methods=['POST'])
+@limiter.limit("20 per minute")
+def toggle_video_status():
+    """Toggle video active/inactive status"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        
+        if not video_id:
+            return jsonify({'success': False, 'message': 'Video ID is required'}), 400
+        
+        # Get the video and verify ownership
+        video = Video.query.filter_by(id=video_id, added_by=user.id).first()
+        if not video:
+            return jsonify({'success': False, 'message': 'Video not found or access denied'}), 404
+        
+        # Toggle status
+        video.is_active = not video.is_active
+        db.session.commit()
+        
+        status = 'activated' if video.is_active else 'deactivated'
+        return jsonify({
+            'success': True, 
+            'message': f'Video "{video.title}" has been {status}',
+            'new_status': video.is_active
+        })
+        
+    except Exception as e:
+        print(f"❌ Error toggling video status: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An error occurred'}), 500
+
+@app.route('/delete_video', methods=['POST'])
+@limiter.limit("10 per minute")
+def delete_video():
+    """Delete video route"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        
+        if not video_id:
+            return jsonify({'success': False, 'message': 'Video ID is required'}), 400
+        
+        # Get the video and verify ownership
+        video = Video.query.filter_by(id=video_id, added_by=user.id).first()
+        if not video:
+            return jsonify({'success': False, 'message': 'Video not found or access denied'}), 404
+        
+        video_title = video.title
+        
+        # Delete related records first (to maintain referential integrity)
+        # Delete watch sessions
+        WatchSession.query.filter_by(video_id=video.id).delete()
+        
+        # Delete earnings
+        Earning.query.filter_by(video_id=video.id).delete()
+        
+        # Delete the video
+        db.session.delete(video)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Video "{video_title}" has been deleted successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error deleting video: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An error occurred while deleting the video'}), 500
+
+@app.route('/video_analytics/<int:video_id>')
+def video_analytics(video_id):
+    """Get analytics for a specific video"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'error': 'YouTuber account required'}), 403
+    
+    try:
+        # Verify video ownership
+        video = Video.query.filter_by(id=video_id, added_by=user.id).first()
+        if not video:
+            return jsonify({'error': 'Video not found or access denied'}), 404
+        
+        # Get analytics data
+        total_views = WatchSession.query.filter_by(video_id=video.id, reward_given=True).count()
+        total_earnings = db.session.query(db.func.sum(Earning.amount)).filter_by(video_id=video.id).scalar() or 0.0
+        
+        # Get daily views for the last 30 days
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        daily_views = db.session.query(
+            db.func.date(WatchSession.start_time).label('date'),
+            db.func.count(WatchSession.id).label('views')
+        ).filter(
+            WatchSession.video_id == video.id,
+            WatchSession.reward_given == True,
+            WatchSession.start_time >= thirty_days_ago
+        ).group_by(db.func.date(WatchSession.start_time)).all()
+        
+        # Average watch time
+        avg_watch_time = db.session.query(db.func.avg(WatchSession.watch_duration)).filter_by(
+            video_id=video.id, reward_given=True
+        ).scalar() or 0
+        
+        return jsonify({
+            'video_title': video.title,
+            'total_views': total_views,
+            'total_earnings': round(total_earnings, 3),
+            'avg_watch_time': round(avg_watch_time, 1),
+            'daily_views': [{'date': str(row.date), 'views': row.views} for row in daily_views],
+            'is_active': video.is_active,
+            'reward_amount': video.reward_amount,
+            'min_watch_time': video.min_watch_time
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting video analytics: {str(e)}")
+        return jsonify({'error': 'An error occurred'}), 500
+
+@app.route('/youtuber_settings')
+def youtuber_settings():
+    """YouTuber account settings"""
+    if 'user_id' not in session:
+        flash('Please log in to access settings.', 'error')
         return redirect(url_for('login'))
     
-    # Get user's videos
-    videos = Video.query.filter_by(added_by=user.id)\
-        .order_by(Video.timestamp.desc()).all()
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        flash('Access denied. YouTuber account required.', 'error')
+        return redirect(url_for('dashboard'))
     
-    return render_template('youtuber_dashboard.html', user=user, videos=videos)
+    try:
+        # Get user's video statistics
+        total_videos = Video.query.filter_by(added_by=user.id).count()
+        active_videos = Video.query.filter_by(added_by=user.id, is_active=True).count()
+        
+        # Get recent IP logs
+        recent_ips = IPLog.query.filter_by(user_id=user.id).order_by(IPLog.timestamp.desc()).limit(10).all()
+        
+        return render_template('youtuber_settings.html',
+                             user=user,
+                             total_videos=total_videos,
+                             active_videos=active_videos,
+                             recent_ips=recent_ips)
+                             
+    except Exception as e:
+        print(f"❌ Error in youtuber_settings: {str(e)}")
+        flash('An error occurred while loading settings.', 'error')
+        return redirect(url_for('youtuber_dashboard'))
+
+@app.route('/bulk_video_action', methods=['POST'])
+@limiter.limit("5 per minute")
+def bulk_video_action():
+    """Bulk actions on videos (activate/deactivate multiple videos)"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        data = request.get_json()
+        video_ids = data.get('video_ids', [])
+        action = data.get('action')  # 'activate', 'deactivate', 'delete'
+        
+        if not video_ids or not action:
+            return jsonify({'success': False, 'message': 'Video IDs and action are required'}), 400
+        
+        # Verify all videos belong to the user
+        videos = Video.query.filter(Video.id.in_(video_ids), Video.added_by == user.id).all()
+        
+        if len(videos) != len(video_ids):
+            return jsonify({'success': False, 'message': 'Some videos not found or access denied'}), 404
+        
+        updated_count = 0
+        
+        if action == 'activate':
+            for video in videos:
+                video.is_active = True
+                updated_count += 1
+        elif action == 'deactivate':
+            for video in videos:
+                video.is_active = False
+                updated_count += 1
+        elif action == 'delete':
+            for video in videos:
+                # Delete related records first
+                WatchSession.query.filter_by(video_id=video.id).delete()
+                Earning.query.filter_by(video_id=video.id).delete()
+                db.session.delete(video)
+                updated_count += 1
+        else:
+            return jsonify({'success': False, 'message': 'Invalid action'}), 400
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{updated_count} videos {action}d successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in bulk video action: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An error occurred'}), 500
+
+# Helper route for video URL validation
+@app.route('/validate_video_url', methods=['POST'])
+def validate_video_url():
+    """Validate YouTube video URL"""
+    if 'user_id' not in session:
+        return jsonify({'valid': False, 'message': 'Please log in first'}), 401
+    
+    try:
+        data = request.get_json()
+        video_url = data.get('video_url', '').strip()
+        
+        if not video_url:
+            return jsonify({'valid': False, 'message': 'URL is required'})
+        
+        # Basic YouTube URL validation
+        if 'youtube.com/watch' not in video_url and 'youtu.be/' not in video_url:
+            return jsonify({'valid': False, 'message': 'Please provide a valid YouTube video URL'})
+        
+        # Check if URL already exists
+        existing_video = Video.query.filter_by(video_url=video_url).first()
+        if existing_video:
+            return jsonify({'valid': False, 'message': 'This video URL has already been added'})
+        
+        return jsonify({'valid': True, 'message': 'Valid YouTube URL'})
+        
+    except Exception as e:
+        print(f"❌ Error validating video URL: {str(e)}")
+        return jsonify({'valid': False, 'message': 'An error occurred'}), 500
 
 # Error handlers
 @app.errorhandler(404)
