@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>User Dashboard – Watch & Earn</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f1f3f6;
+      margin: 0;
+      padding: 0;
+    }
+    .dashboard-container {
+      max-width: 1200px;
+      margin: auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #4a4a4a;
+    }
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .card {
+      flex: 1 1 200px;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .admin-tools {
+      margin-top: 40px;
+      background: #ffe5e5;
+      padding: 20px;
+      border: 2px dashed #ff4d4d;
+      border-radius: 10px;
+    }
+    .search-bar {
+      margin-top: 30px;
+      display: flex;
+      gap: 10px;
+    }
+    .search-bar input, .search-bar select {
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      width: 100%;
+    }
+    .video-table {
+      width: 100%;
+      margin-top: 20px;
+      border-collapse: collapse;
+      background: white;
+    }
+    .video-table th, .video-table td {
+      padding: 12px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    .logout-btn {
+      float: right;
+      background: #444;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+    .logout-btn:hover {
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <a href="{{ url_for('logout') }}" class="logout-btn">Logout</a>
+    <h1>👋 Welcome, {{ session.get('user_email') }}</h1>
+
+    <!-- Summary Cards -->
+    <div class="summary">
+      <div class="card">
+        <h3>💰 Balance</h3>
+        <p>${{ "%.2f"|format(current_user.balance_usd or 0.0) }}</p>
+      </div>
+      <div class="card">
+        <h3>🎬 Videos Watched Today</h3>
+        <p>{{ current_user.videos_watched_today or 0 }}/{{ MAX_VIDEOS_PER_DAY }}</p>
+      </div>
+      <div class="card">
+        <h3>📅 Daily Bonus</h3>
+        <p>{{ "Claimed" if current_user.daily_bonus_given else "Available" }}</p>
+      </div>
+      <div class="card">
+        <h3>🕒 Online Time Today</h3>
+        <p>{{ current_user.daily_online_time or 0 }} sec</p>
+      </div>
+      <div class="card">
+        <h3>🔐 Status</h3>
+        <p>
+          {% if current_user.is_verified %}
+            ✅ Verified
+          {% else %}
+            ❌ Not Verified
+          {% endif %}
+          <br>
+          {% if current_user.is_banned %}
+            🚫 Banned ({{ current_user.ban_reason }})
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="🔍 Search videos..." onkeyup="filterVideos()">
+      <select id="sortBy" onchange="sortVideos()">
+        <option value="">Sort by</option>
+        <option value="recent">Most Recent</option>
+        <option value="reward">Highest Reward</option>
+      </select>
+    </div>
+
+    <!-- Video Table -->
+    <table class="video-table" id="videoTable">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Reward</th>
+          <th>Watch</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for video in video_list %}
+        <tr>
+          <td>{{ video.title }}</td>
+          <td>${{ "%.2f"|format(video.reward_amount or 0.01) }}</td>
+          <td><a href="{{ url_for('watch_video', video_id=video.id) }}">▶️ Watch</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Admin Tools -->
+    {% if session.get('account_type') == 'Admin' %}
+    <div class="admin-tools">
+      <h2>⚙️ Admin Tools</h2>
+      <a href="{{ url_for('admin_panel') }}">Go to Admin Panel</a>
+      <form method="POST" action="{{ url_for('reset_settings') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit">Reset All Settings to Default</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    function filterVideos() {
+      const input = document.getElementById("searchInput").value.toLowerCase();
+      const rows = document.querySelectorAll("#videoTable tbody tr");
+      rows.forEach(row => {
+        const title = row.children[0].textContent.toLowerCase();
+        row.style.display = title.includes(input) ? "" : "none";
+      });
+    }
+
+    function sortVideos() {
+      const select = document.getElementById("sortBy").value;
+      const table = document.getElementById("videoTable").getElementsByTagName('tbody')[0];
+      const rows = Array.from(table.rows);
+
+      if (select === "recent") {
+        rows.sort((a, b) => b.rowIndex - a.rowIndex);
+      } else if (select === "reward") {
+        rows.sort((a, b) => {
+          const rewardA = parseFloat(a.cells[1].textContent.replace('$', ''));
+          const rewardB = parseFloat(b.cells[1].textContent.replace('$', ''));
+          return rewardB - rewardA;
+        });
+      }
+
+      rows.forEach(row => table.appendChild(row));
+    }
+  </script>
+</body>
+</html>
