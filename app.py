@@ -1504,9 +1504,7 @@ def upload_success(video_id=None):
     }
     
     return render_template('upload_success.html', **template_data)
-
-app = Flask(__name__, template_folder='templates', static_folder='static')
-
+    
 @app.route('/test')
 def test():
     return render_template('user_dashboard.html')
