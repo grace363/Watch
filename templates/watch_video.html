@@ -1,0 +1,117 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch Video – Watch & Earn</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      color: #333;
+      padding: 0;
+      margin: 0;
+    }
+    .video-container {
+      max-width: 800px;
+      margin: 30px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .controls, .status {
+      margin-top: 15px;
+      text-align: center;
+    }
+    .timer {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .reward-message {
+      color: green;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .cheat-warning {
+      color: red;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+  <script>
+    let watchStart = Date.now();
+    let focusLost = 0;
+    let watchTime = 0;
+    let interval;
+    let backPressed = false;
+    let sessionToken = '{{ session_token }}';
+    const minWatch = {{ video.min_watch_time }};
+    const maxFocusLoss = {{ anti_cheat }};function updateTimer() {
+  watchTime++;
+  document.getElementById('timer').innerText = watchTime + "s watched";
+  if (watchTime >= minWatch) {
+    clearInterval(interval);
+    document.getElementById('reward-status').innerText = "✅ You've earned a reward!";
+    sendWatchComplete();
+  }
+}
+
+function sendWatchComplete() {
+  fetch("/complete_watch", {
+    method: "POST",
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token() }}'
+    },
+    body: JSON.stringify({
+      session_token: sessionToken,
+      duration: watchTime,
+      focus_lost: focusLost,
+      back_button: backPressed
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.cheating) {
+      document.getElementById('reward-status').innerText = "🚨 Cheating Detected: " + data.reason;
+    }
+  });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    focusLost++;
+    if (focusLost > maxFocusLoss) {
+      document.getElementById('reward-status').innerText = "❌ Too many focus losses. Session invalidated.";
+      clearInterval(interval);
+      sendWatchComplete();
+    }
+  }
+});
+
+window.onbeforeunload = () => {
+  backPressed = true;
+  sendWatchComplete();
+};
+
+window.onload = () => {
+  interval = setInterval(updateTimer, 1000);
+};
+
+  </script>
+</head>
+<body>
+  <div class="video-container">
+    <h2>{{ video.title }}</h2>
+    <video id="video" width="100%" controls autoplay>
+      <source src="{{ video.video_url }}" type="video/mp4">
+      Your browser does not support HTML5 video.
+    </video><div class="status">
+  <p class="timer" id="timer">0s watched</p>
+  <p class="reward-message" id="reward-status"></p>
+</div>
+
+  </div>
+</body>
+</html>
