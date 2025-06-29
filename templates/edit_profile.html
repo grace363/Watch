@@ -1,117 +1,240 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Watch Video – Watch & Earn</title>
+  <title>Edit Profile – Watch & Earn</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      color: #333;
-      padding: 0;
-      margin: 0;
+      padding: 2em;
+      background-color: #f5f5f5;
     }
-    .video-container {
-      max-width: 800px;
-      margin: 30px auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: white;
+      padding: 2em;
+      border-radius: 10px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    .controls, .status {
-      margin-top: 15px;
-      text-align: center;
+    h2 {
+      border-bottom: 2px solid #ddd;
+      padding-bottom: 0.5em;
+      margin-bottom: 1em;
     }
-    .timer {
-      font-size: 18px;
-      font-weight: bold;
+    form {
+      margin-bottom: 2em;
     }
-    .reward-message {
+    input, select {
+      width: 100%;
+      padding: 0.75em;
+      margin: 0.5em 0 1em 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      padding: 0.75em 1.5em;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .success {
       color: green;
-      font-weight: bold;
-      margin-top: 10px;
+      padding: 10px;
+      margin: 10px 0;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      border-radius: 5px;
     }
-    .cheat-warning {
+    .error {
       color: red;
+      padding: 10px;
+      margin: 10px 0;
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      border-radius: 5px;
+    }
+    .nav-link {
+      display: inline-block;
+      margin: 10px 0;
+      color: #007bff;
+      text-decoration: none;
+    }
+    .nav-link:hover {
+      text-decoration: underline;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
       font-weight: bold;
-      margin-top: 10px;
     }
   </style>
-  <script>
-    let watchStart = Date.now();
-    let focusLost = 0;
-    let watchTime = 0;
-    let interval;
-    let backPressed = false;
-    let sessionToken = '{{ session_token }}';
-    const minWatch = {{ video.min_watch_time }};
-    const maxFocusLoss = {{ anti_cheat }};function updateTimer() {
-  watchTime++;
-  document.getElementById('timer').innerText = watchTime + "s watched";
-  if (watchTime >= minWatch) {
-    clearInterval(interval);
-    document.getElementById('reward-status').innerText = "✅ You've earned a reward!";
-    sendWatchComplete();
-  }
-}
-
-function sendWatchComplete() {
-  fetch("/complete_watch", {
-    method: "POST",
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': '{{ csrf_token() }}'
-    },
-    body: JSON.stringify({
-      session_token: sessionToken,
-      duration: watchTime,
-      focus_lost: focusLost,
-      back_button: backPressed
-    })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.cheating) {
-      document.getElementById('reward-status').innerText = "🚨 Cheating Detected: " + data.reason;
-    }
-  });
-}
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    focusLost++;
-    if (focusLost > maxFocusLoss) {
-      document.getElementById('reward-status').innerText = "❌ Too many focus losses. Session invalidated.";
-      clearInterval(interval);
-      sendWatchComplete();
-    }
-  }
-});
-
-window.onbeforeunload = () => {
-  backPressed = true;
-  sendWatchComplete();
-};
-
-window.onload = () => {
-  interval = setInterval(updateTimer, 1000);
-};
-
-  </script>
 </head>
 <body>
-  <div class="video-container">
-    <h2>{{ video.title }}</h2>
-    <video id="video" width="100%" controls autoplay>
-      <source src="{{ video.video_url }}" type="video/mp4">
-      Your browser does not support HTML5 video.
-    </video><div class="status">
-  <p class="timer" id="timer">0s watched</p>
-  <p class="reward-message" id="reward-status"></p>
-</div>
+  <div class="container">
+    <!-- Navigation -->
+    <div style="margin-bottom: 2em;">
+      <a href="{{ url_for('youtuber_dashboard') if user.account_type == 'YouTuber' else url_for('user_dashboard') }}" class="nav-link">← Back to Dashboard</a>
+    </div>
 
+    <h2>Edit Basic Information</h2>
+    <form id="basic-form">
+      <!-- CSRF Token -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_basic">
+      
+      <label for="first_name">First Name:</label>
+      <input type="text" id="first_name" name="first_name" value="{{ user.first_name or '' }}" required>
+      
+      <label for="last_name">Last Name:</label>
+      <input type="text" id="last_name" name="last_name" value="{{ user.last_name or '' }}" required>
+      
+      <label for="phone">Phone:</label>
+      <input type="text" id="phone" name="phone" value="{{ user.phone or '' }}" placeholder="Optional">
+      
+      <button type="submit">Update Basic Info</button>
+    </form>
+
+    <h2>Change Account Type</h2>
+    <form id="settings-form">
+      <!-- CSRF Token -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_settings">
+      
+      <label for="account_type">Account Type:</label>
+      <select id="account_type" name="account_type" required>
+        <option value="User" {% if user.account_type == 'User' %}selected{% endif %}>User</option>
+        <option value="YouTuber" {% if user.account_type == 'YouTuber' %}selected{% endif %}>YouTuber</option>
+      </select>
+      
+      <p style="font-size: 0.9em; color: #666; margin-top: -10px;">
+        <strong>Note:</strong> Changing your account type will redirect you to the appropriate dashboard.
+      </p>
+      
+      <button type="submit">Update Account Type</button>
+    </form>
+
+    <h2>Change Password</h2>
+    <form id="password-form">
+      <!-- CSRF Token -->
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="change_password">
+      
+      <label for="current_password">Current Password:</label>
+      <input type="password" id="current_password" name="current_password" required>
+      
+      <label for="new_password">New Password:</label>
+      <input type="password" id="new_password" name="new_password" required minlength="6">
+      
+      <label for="confirm_password">Confirm New Password:</label>
+      <input type="password" id="confirm_password" name="confirm_password" required minlength="6">
+      
+      <button type="submit">Change Password</button>
+    </form>
+
+    <!-- Message Display Area -->
+    <div id="message"></div>
   </div>
+
+  <script>
+    function handleForm(formId) {
+      const form = document.getElementById(formId);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        // Clear previous messages
+        const messageDiv = document.getElementById('message');
+        messageDiv.innerHTML = '';
+        messageDiv.className = '';
+        
+        // Show loading state
+        const submitButton = form.querySelector('button[type="submit"]');
+        const originalText = submitButton.textContent;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Updating...';
+        
+        try {
+          const formData = new FormData(form);
+          const response = await fetch('/update_profile', {
+            method: 'POST',
+            body: formData
+          });
+          
+          const result = await response.json();
+          
+          if (result.success) {
+            messageDiv.className = 'success';
+            messageDiv.innerHTML = `✅ ${result.message}`;
+            
+            // Reset form if password was changed
+            if (formId === 'password-form') {
+              form.reset();
+              // Re-add CSRF token after reset
+              const csrfInput = document.createElement('input');
+              csrfInput.type = 'hidden';
+              csrfInput.name = 'csrf_token';
+              csrfInput.value = '{{ csrf_token() }}';
+              form.appendChild(csrfInput);
+              
+              const actionInput = document.createElement('input');
+              actionInput.type = 'hidden';
+              actionInput.name = 'action';
+              actionInput.value = 'change_password';
+              form.appendChild(actionInput);
+            }
+            
+            // Handle redirect if needed
+            if (result.redirect) {
+              setTimeout(() => {
+                window.location.href = result.redirect;
+              }, 1500);
+            }
+          } else {
+            messageDiv.className = 'error';
+            messageDiv.innerHTML = `❌ ${result.error || 'Update failed'}`;
+          }
+        } catch (error) {
+          messageDiv.className = 'error';
+          messageDiv.innerHTML = `❌ Network error: ${error.message}`;
+        } finally {
+          // Restore button state
+          submitButton.disabled = false;
+          submitButton.textContent = originalText;
+        }
+      });
+    }
+
+    // Initialize form handlers
+    handleForm('basic-form');
+    handleForm('settings-form');
+    handleForm('password-form');
+    
+    // Password confirmation validation
+    document.getElementById('confirm_password').addEventListener('input', function() {
+      const newPassword = document.getElementById('new_password').value;
+      const confirmPassword = this.value;
+      
+      if (confirmPassword && newPassword !== confirmPassword) {
+        this.setCustomValidity('Passwords do not match');
+      } else {
+        this.setCustomValidity('');
+      }
+    });
+    
+    document.getElementById('new_password').addEventListener('input', function() {
+      const confirmPassword = document.getElementById('confirm_password');
+      if (confirmPassword.value) {
+        confirmPassword.dispatchEvent(new Event('input'));
+      }
+    });
+  </script>
 </body>
 </html>
