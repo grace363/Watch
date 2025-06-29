@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Secure Access Portal</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+                        radial-gradient(circle at 40% 80%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
+            animation: backgroundShift 10s ease-in-out infinite;
+        }
+
+        @keyframes backgroundShift {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.7; }
+        }
+
+        .login-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 450px;
+            position: relative;
+            z-index: 10;
+            animation: slideIn 0.8s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .security-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #f9ca24);
+            background-size: 300% 100%;
+            animation: gradientShift 3s ease-in-out infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .admin-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .admin-header h1 {
+            color: #2c3e50;
+            font-size: 28px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .admin-header .shield-icon {
+            color: #e74c3c;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .admin-header .subtitle {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .security-badges {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .security-badge {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            display: inline-block;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .security-badge.active {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { box-shadow: 0 0 5px rgba(46, 204, 113, 0.5); }
+            to { box-shadow: 0 0 20px rgba(46, 204, 113, 0.8); }
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 15px 50px 15px 15px;
+            border: 2px solid #e1e8ed;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+            background: rgba(255, 255, 255, 1);
+        }
+
+        .form-group input.error {
+            border-color: #e74c3c;
+            box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+        }
+
+        .form-group i {
+            position: absolute;
+            right: 15px;
+            top: 50px;
+            transform: translateY(-50%);
+            color: #7f8c8d;
+            transition: color 0.3s ease;
+        }
+
+        .form-group input:focus + i {
+            color: #3498db;
+        }
+
+        .password-strength {
+            margin-top: 5px;
+            font-size: 12px;
+            height: 20px;
+        }
+
+        .strength-weak { color: #e74c3c; }
+        .strength-medium { color: #f39c12; }
+        .strength-strong { color: #27ae60; }
+
+        .login-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #2980b9, #3498db);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .login-btn:hover::before {
+            left: 100%;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(52, 152, 219, 0.4);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .login-btn:disabled:hover {
+            box-shadow: none;
+        }
+
+        .loading {
+            display: none;
+        }
+
+        .loading.show {
+            display: inline-block;
+            margin-left: 10px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .security-info {
+            background: linear-gradient(135deg, #ecf0f1, #bdc3c7);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #27ae60;
+            margin-top: 25px;
+            position: relative;
+        }
+
+        .security-info::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #27ae60, #2ecc71, #27ae60);
+            border-radius: 12px;
+            z-index: -1;
+            opacity: 0.3;
+        }
+
+        .security-info h4 {
+            color: #27ae60;
+            margin-bottom: 12px;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .security-info ul {
+            font-size: 12px;
+            color: #2c3e50;
+            list-style: none;
+        }
+
+        .security-info li {
+            margin: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .security-info li::before {
+            content: '🔒';
+            font-size: 14px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border: 1px solid;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-danger {
+            background: linear-gradient(135deg, #fee, #fdd);
+            color: #c0392b;
+            border-color: #e74c3c;
+        }
+
+        .alert-warning {
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+            color: #856404;
+            border-color: #f39c12;
+        }
+
+        .alert-info {
+            background: linear-gradient(135deg, #d1ecf1, #bee5eb);
+            color: #0c5460;
+            border-color: #17a2b8;
+        }
+
+        .attempt-counter {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
+        .captcha-container {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #dee2e6;
+            text-align: center;
+            display: none;
+        }
+
+        .captcha-container.show {
+            display: block;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .captcha-question {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .captcha-input {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 25px;
+        }
+
+        .back-link a {
+            color: #3498db;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .back-link a:hover {
+            color: #2980b9;
+            text-decoration: underline;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+        }
+
+        .connection-status.online {
+            background: #27ae60;
+            color: white;
+        }
+
+        .connection-status.offline {
+            background: #e74c3c;
+            color: white;
+        }
+
+        /* Responsive design */
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 20px;
+                padding: 30px 25px;
+            }
+            
+            .admin-header h1 {
+                font-size: 24px;
+            }
+            
+            .security-badges {
+                gap: 5px;
+            }
+            
+            .security-badge {
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status online" id="connectionStatus">
+        <i class="fas fa-wifi"></i> Secure Connection
+    </div>
+
+    <div class="login-container">
+        <div class="security-header"></div>
+        
+        <div class="admin-header">
+            <h1>
+                <i class="fas fa-shield-alt shield-icon"></i>
+                Admin Access Portal
+            </h1>
+            <p class="subtitle">Ultra-Secure Administrative Control Center</p>
+            
+            <div class="security-badges">
+                <span class="security-badge">ENCRYPTED</span>
+                <span class="security-badge active">MONITORED</span>
+                <span class="security-badge">RESTRICTED</span>
+            </div>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <form id="adminLoginForm" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="security_token" id="securityToken">
+            
+            <div class="form-group">
+                <label for="email">
+                    <i class="fas fa-envelope"></i> Administrator Email
+                </label>
+                <input type="email" id="email" name="email" required autocomplete="username">
+                <i class="fas fa-user"></i>
+            </div>
+
+            <div class="form-group">
+                <label for="password">
+                    <i class="fas fa-key"></i> Secure Password
+                </label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+                <i class="fas fa-lock"></i>
+                <div class="password-strength" id="passwordStrength"></div>
+            </div>
+
+            <!-- 2FA field -->
+            <div class="form-group" id="totpGroup" style="display: none;">
+                <label for="totp_code">
+                    <i class="fas fa-mobile-alt"></i> Two-Factor Authentication Code
+                </label>
+                <input type="text" id="totp_code" name="totp_code" placeholder="000000" maxlength="6" autocomplete="one-time-code">
+                <i class="fas fa-key"></i>
+            </div>
+
+            <!-- Captcha (shown after failed attempts) -->
+            <div class="captcha-container" id="captchaContainer">
+                <div class="captcha-question" id="captchaQuestion"></div>
+                <input type="number" id="captchaAnswer" name="captcha_answer" class="captcha-input" placeholder="Answer">
+                <input type="hidden" id="captchaChallenge" name="captcha_challenge">
+            </div>
+
+            <button type="submit" class="login-btn" id="loginButton">
+                <i class="fas fa-sign-in-alt"></i> Secure Login
+                <i class="fas fa-spinner loading" id="loadingSpinner"></i>
+            </button>
+        </form>
+
+        <div class="attempt-counter" id="attemptCounter">
+            Login attempts: <span id="attemptCount">0</span>/3
+        </div>
+
+        <div class="security-info">
+            <h4>
+                <i class="fas fa-shield-alt"></i>
+                Active Security Measures
+            </h4>
+            <ul>
+                <li>256-bit SSL/TLS encryption</li>
+                <li>Multi-factor authentication</li>
+                <li>Real-time threat detection</li>
+                <li>IP geolocation filtering</li>
+                <li>Behavioral analysis</li>
+                <li>Session fingerprinting</li>
+                <li>Automated security scanning</li>
+                <li>Comprehensive audit logging</li>
+            </ul>
+        </div>
+
+        <div class="back-link">
+            <a href="/"><i class="fas fa-arrow-left"></i> Return to Main Site</a>
+        </div>
+    </div>
+
+    <script>
+        // Enhanced Security JavaScript
+        class SecureAdminLogin {
+            constructor() {
+                this.attemptCount = 0;
+                this.maxAttempts = 3;
+                this.isLocked = false;
+                this.captchaEnabled = false;
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.generateSecurityToken();
+                this.checkConnectionStatus();
+                this.setupSecurityMonitoring();
+                this.loadAttemptCount();
+            }
+
+            setupEventListeners() {
+                const form = document.getElementById('adminLoginForm');
+                const passwordInput = document.getElementById('password');
+                
+                form.addEventListener('submit', (e) => this.handleLogin(e));
+                passwordInput.addEventListener('input', (e) => this.checkPasswordStrength(e.target.value));
+                
+                // Prevent common attack vectors
+                document.addEventListener('contextmenu', (e) => e.preventDefault());
+                document.addEventListener('selectstart', (e) => e.preventDefault());
+                document.addEventListener('dragstart', (e) => e.preventDefault());
+            }
+
+            generateSecurityToken() {
+                const token = this.generateRandomString(32);
+                document.getElementById('securityToken').value = token;
+            }
+
+            generateRandomString(length) {
+                const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                let result = '';
+                for (let i = 0; i < length; i++) {
+                    result += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return result;
+            }
+
+            checkPasswordStrength(password) {
+                const strengthDiv = document.getElementById('passwordStrength');
+                let strength = 0;
+                let message = '';
+
+                if (password.length >= 8) strength++;
+                if (/[A-Z]/.test(password)) strength++;
+                if (/[a-z]/.test(password)) strength++;
+                if (/[0-9]/.test(password)) strength++;
+                if (/[^A-Za-z0-9]/.test(password)) strength++;
+
+                switch (strength) {
+                    case 0:
+                    case 1:
+                    case 2:
+                        message = '🔴 Weak password';
+                        strengthDiv.className = 'password-strength strength-weak';
+                        break;
+                    case 3:
+                    case 4:
+                        message = '🟡 Medium password';
+                        strengthDiv.className = 'password-strength strength-medium';
+                        break;
+                    case 5:
+                        message = '🟢 Strong password';
+                        strengthDiv.className = 'password-strength strength-strong';
+                        break;
+                }
+
+                strengthDiv.textContent = password ? message : '';
+            }
+
+            checkConnectionStatus() {
+                const statusDiv = document.getElementById('connectionStatus');
+                
+                if (navigator.onLine) {
+                    statusDiv.className = 'connection-status online';
+                    statusDiv.innerHTML = '<i class="fas fa-wifi"></i> Secure Connection';
+                } else {
+                    statusDiv.className = 'connection-status offline';
+                    statusDiv.innerHTML = '<i class="fas fa-wifi-slash"></i> Connection Lost';
+                }
+            }
+
+            setupSecurityMonitoring() {
+                // Monitor for suspicious activity
+                let keyCount = 0;
+                let mouseCount = 0;
+                
+                document.addEventListener('keydown', () => {
+                    keyCount++;
+                    if (keyCount > 1000) {
+                        this.showAlert('Suspicious activity detected', 'warning');
+                    }
+                });
+
+                document.addEventListener('mousemove', () => {
+                    mouseCount++;
+                });
+
+                // Check for developer tools
+                setInterval(() => {
+                    if (window.outerHeight - window.innerHeight > 200 || 
+                        window.outerWidth - window.innerWidth > 200) {
+                        this.showAlert('Developer tools detected', 'warning');
+                    }
+                }, 500);
+            }
+
+            loadAttemptCount() {
+                const saved = localStorage.getItem('adminAttempts');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    if (Date.now() - data.timestamp < 900000) { // 15 minutes
+                        this.attemptCount = data.count;
+                        this.updateAttemptDisplay();
+                        
+                        if (this.attemptCount >= this.maxAttempts) {
+                            this.enableCaptcha();
+                        }
+                    }
+                }
+            }
+
+            saveAttemptCount() {
+                localStorage.setItem('adminAttempts', JSON.stringify({
+                    count: this.attemptCount,
+                    timestamp: Date.now()
+                }));
+            }
+
+            updateAttemptDisplay() {
+                document.getElementById('attemptCount').textContent = this.attemptCount;
+                
+                if (this.attemptCount >= this.maxAttempts - 1) {
+                    document.getElementById('attemptCounter').style.color = '#e74c3c';
+                }
+            }
+
+            enableCaptcha() {
+                this.captchaEnabled = true;
+                const container = document.getElementById('captchaContainer');
+                container.classList.add('show');
+                
+                const num1 = Math.floor(Math.random() * 10) + 1;
+                const num2 = Math.floor(Math.random() * 10) + 1;
+                const answer = num1 + num2;
+                
+                document.getElementById('captchaQuestion').textContent = 
+                    `Security Check: What is ${num1} + ${num2}?`;
+                document.getElementById('captchaChallenge').value = answer;
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                
+                if (this.isLocked) {
+                    this.showAlert('Account temporarily locked. Please try again later.', 'danger');
+                    return;
+                }
+
+                if (this.captchaEnabled) {
+                    const userAnswer = document.getElementById('captchaAnswer').value;
+                    const correctAnswer = document.getElementById('captchaChallenge').value;
+                    
+                    if (userAnswer !== correctAnswer) {
+                        this.showAlert('Incorrect captcha answer', 'danger');
+                        this.enableCaptcha(); // Generate new captcha
+                        return;
+                    }
+                }
+
+                const formData = new FormData(e.target);
+                const loginButton = document.getElementById('loginButton');
+                const spinner = document.getElementById('loadingSpinner');
+                
+                // Disable form and show loading
+                loginButton.disabled = true;
+                spinner.classList.add('show');
+                
+                try {
+                    const response = await fetch('/admin/login', {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.showAlert('Login successful! Redirecting...', 'success');
+                        localStorage.removeItem('adminAttempts');
+                        
+                        setTimeout(() => {
+                            window.location.href = data.redirect;
+                        }, 1000);
+                    } else {
+                        this.attemptCount++;
+                        this.saveAttemptCount();
+                        this.updateAttemptDisplay();
+                        
+                        if (this.attemptCount >= this.maxAttempts) {
+                            this.enableCaptcha();
+                        }
+                        
+                        if (this.attemptCount >= this.maxAttempts + 2) {
+                            this.isLocked = true;
+                            this.showAlert('Too many failed attempts. Account locked for 15 minutes.', 'danger');
+                        } else {
+                            this.showAlert(data.error || 'Login failed', 'danger');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showAlert('Connection error. Please try again.', 'danger');
+                } finally {
+                    loginButton.disabled = false;
+                    spinner.classList.remove('show');
+                }
+            }
+
+            showAlert(message, type = 'info') {
+                const container = document.getElementById('alertContainer');
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.innerHTML = `
+                    <i class="fas fa-${this.getAlertIcon(type)}"></i>
+                    ${message}
+                `;
+                
+                container.innerHTML = '';
+                container.appendChild(alert);
+                
+                if (type === 'success') {
+                    setTimeout(() => {
+                        alert.remove();
+                    }, 5000);
+                }
+            }
+
+            getAlertIcon(type) {
+                const icons = {
+                    success: 'check-circle',
+                    danger: 'exclamation-triangle',
+                    warning: 'exclamation-circle',
+                    info: 'info-circle'
+                };
+                return icons[type] || 'info-circle';
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new SecureAdminLogin();
+        });
+
+        // Monitor connection status
+        window.addEventListener('online', () => {
+            document.getElementById('connectionStatus').className = 'connection-status online';
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-wifi"></i> Secure Connection';
+        });
+
+        window.addEventListener('offline', () => {
+            document.getElementById('connectionStatus').className = 'connection-status offline';
+            document.getElementById('connectionStatus').innerHTML = '<i class="fas fa-wifi-slash"></i> Connection Lost';
+        });
+    </script>
+</body>
+</html>
