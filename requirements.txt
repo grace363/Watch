@@ -10,3 +10,4 @@ flask_sqlalchemy==3.0.5
 itsdangerous==2.1.2
 python-dotenv==1.0.0
 psycopg2-binary
+flask-wtf
