@@ -1,43 +1,66 @@
-#!/usr/bin/env python3
-"""
-Database initialization script for Watch & Earn Flask App
-Run this once to create all database tables.
-
-Usage:
-    python init_db.py
-"""
-
-from app import app, db
-from app import User, WithdrawalRequest, Video  # Import all models
-
-def init_database():
-    """Create all database tables"""
-    try:
-        with app.app_context():
-            # Create all tables
-            db.create_all()
-            print("✅ Database tables created successfully!")
-            
-            # Verify tables were created
-            tables = db.engine.table_names()
-            print(f"📋 Created tables: {', '.join(tables)}")
-            
-            # Check if we have any existing users
-            user_count = User.query.count()
-            print(f"👥 Current user count: {user_count}")
-            
-    except Exception as e:
-        print(f"❌ Error creating database: {str(e)}")
-        return False
-    
-    return True
-
-if __name__ == '__main__':
-    print("🚀 Initializing Watch & Earn Database...")
-    success = init_database()
-    
-    if success:
-        print("🎉 Database initialization completed!")
-    else:
-        print("💥 Database initialization failed!")
-        exit(1)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Watch & Earn – Get Paid for Your Time</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(to right, #1a73e8, #67c2ff);
+      margin: 0;
+      padding: 0;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      text-align: center;
+    }
+    .container {
+      background-color: rgba(0, 0, 0, 0.4);
+      padding: 40px;
+      border-radius: 20px;
+      max-width: 500px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      font-size: 2.2em;
+      margin-bottom: 15px;
+    }
+    p {
+      font-size: 1.1em;
+      margin-bottom: 25px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 25px;
+      margin: 10px;
+      border: none;
+      border-radius: 30px;
+      background-color: #ffcc00;
+      color: #000;
+      text-decoration: none;
+      font-weight: bold;
+      transition: background 0.3s ease;
+    }
+    .btn:hover {
+      background-color: #ffaa00;
+    }
+    @media (max-width: 500px) {
+      h1 { font-size: 1.6em; }
+      p { font-size: 1em; }
+      .btn { padding: 10px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Welcome to <strong>Watch & Earn</strong></h1>
+    <p>Watch videos, stay online, and earn real money every minute. No points — just real cash rewards.</p>
+    <a href="/register" class="btn">Get Started</a>
+    <a href="/login" class="btn">Login</a>
+  </div>
+</body>
+</html>
