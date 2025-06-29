@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>500 - Internal Server Error</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f3f4f6;
+      color: #333;
+      text-align: center;
+      padding: 80px 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 42px;
+      color: #ff6b6b;
+    }
+    p {
+      font-size: 18px;
+      margin-top: 20px;
+    }
+    a {
+      color: #2196F3;
+      text-decoration: none;
+      font-weight: bold;
+      display: inline-block;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>⚠️ 500 - Server Error</h1>
+    <p>Something went wrong on our end. Please try again later.</p>
+    <a href="{{ url_for('user_dashboard') if session.get('account_type') == 'User' else url_for('youtuber_dashboard') }}">🔁 Reload Dashboard</a>
+  </div>
+
+</body>
+</html>
