@@ -1505,6 +1505,10 @@ def upload_success(video_id=None):
     
     return render_template('upload_success.html', **template_data)
 
+@app.route('/test')
+def test():
+    return render_template('user_dashboard.html')
+
 @app.route('/rules_popup')
 def rules_popup():
     return render_template('rules_popup.html')  # or your actual template
