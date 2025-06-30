@@ -713,15 +713,24 @@ def user_dashboard():
     
     # Check daily limits
     can_watch_more = check_daily_video_limit(user.id)
-    time_until_daily_bonus = max(0, DAILY_ONLINE_TIME - user.daily_online_time)
+    time_until_daily_bonus = max(0, DAILY_ONLINE_TIME - (user.daily_online_time or 0))
+    
+    # Calculate videos remaining today
+    videos_remaining = max(0, MAX_VIDEOS_PER_DAY - (user.videos_watched_today or 0))
     
     return render_template('user_dashboard.html', 
                          user=user, 
                          earnings=recent_earnings,
                          videos=videos,
                          can_watch_more=can_watch_more,
-                         videos_remaining=MAX_VIDEOS_PER_DAY - user.videos_watched_today,
-                         time_until_daily_bonus=time_until_daily_bonus)
+                         videos_remaining=videos_remaining,
+                         time_until_daily_bonus=time_until_daily_bonus,
+                         # Add all missing template variables
+                         MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
+                         DAILY_ONLINE_TIME=DAILY_ONLINE_TIME,
+                         DAILY_REWARD=DAILY_REWARD,
+                         SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
+                         VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
 
 # Configuration for file uploads - moved to environment variables
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads/videos')
