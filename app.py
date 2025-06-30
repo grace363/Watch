@@ -229,6 +229,7 @@ class User(db.Model):
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
     session_start_time = db.Column(db.DateTime)
     last_heartbeat = db.Column(db.DateTime)
+    last_bonus_claim = db.column(db.DateTime) #when bonus was last claimed
 
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
