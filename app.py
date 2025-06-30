@@ -2050,24 +2050,6 @@ def withdraw():
         return jsonify({'message': 'Withdrawal request submitted'}) 
     return jsonify({'error': f'Minimum withdrawal is ${MIN_WITHDRAW_AMOUNT} or insufficient balance'})
 
-@app.route('/admin/panel') 
-def admin_panel(): 
-    users = User.query.all() 
-    withdrawals = WithdrawalRequest.query.all() 
-    videos = Video.query.all() 
-    
-    # Get IP tracking data if enabled
-    ip_logs = []
-    if ENABLE_IP_TRACKING:
-        ip_logs = IPLog.query.order_by(IPLog.timestamp.desc()).limit(100).all()
-    
-    return render_template('admin_panel.html', 
-                         users=users, 
-                         withdrawals=withdrawals, 
-                         videos=videos,
-                         ip_logs=ip_logs,
-                         ip_tracking_enabled=ENABLE_IP_TRACKING)
-
 @app.route('/admin/user-ips/<int:user_id>')
 def get_user_ip_history(user_id):
     """Get IP history for a specific user (admin only)"""
@@ -2161,11 +2143,7 @@ def upload_success(video_id=None):
     }
     
     return render_template('upload_success.html', **template_data)
-    
-@app.route('/test')
-def test():
-    return render_template('user_dashboard.html')
-
+   
 @app.route('/rules_popup')
 def rules_popup():
     return render_template('rules_popup.html')  # or your actual template
