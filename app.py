@@ -752,7 +752,6 @@ def get_file_size_mb(file_path):
     except:
         return 0
 
-# Admin Panel Route (ADD THIS TO YOUR APP.PY)
 @app.route('/admin_panel')
 def admin_panel():
     """Admin panel for managing videos"""
@@ -767,6 +766,17 @@ def admin_panel():
     # Get all videos for management
     videos = Video.query.order_by(Video.timestamp.desc()).all()
     
+    # Get all users for management
+    users = User.query.all()
+    
+    # Get all withdrawal requests for management
+    withdrawals = WithdrawalRequest.query.all()
+    
+    # Get IP tracking data if enabled
+    ip_logs = []
+    if ENABLE_IP_TRACKING:
+        ip_logs = IPLog.query.order_by(IPLog.timestamp.desc()).limit(100).all()
+    
     # Get system stats
     total_users = User.query.count()
     total_videos = Video.query.count()
@@ -775,6 +785,10 @@ def admin_panel():
     
     return render_template('admin_panel.html', 
                          videos=videos,
+                         users=users,
+                         withdrawals=withdrawals,
+                         ip_logs=ip_logs,
+                         ip_tracking_enabled=ENABLE_IP_TRACKING,
                          total_users=total_users,
                          total_videos=total_videos,
                          active_videos=active_videos,
