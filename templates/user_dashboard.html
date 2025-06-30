@@ -660,7 +660,7 @@
         // Session heartbeat and timer management
         let onlineStartTime = Date.now();
         let currentOnlineTime = {{ user.daily_online_time or 0 }};
-        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }};
+        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }}; // Ensures default 60 seconds
         const sessionHeartbeatInterval = {{ SESSION_HEARTBEAT_INTERVAL or 5 }} * 1000;
         
         let focusLostCount = 0;
@@ -687,7 +687,8 @@
 
         // Update online timer display
         function updateTimer() {
-            if (windowFocused) {
+            // Only increment if window is focused AND we haven't reached the required time yet
+            if (windowFocused && currentOnlineTime < requiredTime) {
                 currentOnlineTime++;
                 document.getElementById('timeDisplay').textContent = currentOnlineTime + 's';
                 
@@ -699,6 +700,11 @@
                 if (claimBtn && currentOnlineTime >= requiredTime) {
                     claimBtn.disabled = false;
                 }
+            }
+            // If we've reached the required time, ensure display shows the max time
+            else if (currentOnlineTime >= requiredTime) {
+                document.getElementById('timeDisplay').textContent = requiredTime + 's';
+                document.getElementById('timeProgress').style.width = '100%';
             }
         }
 
