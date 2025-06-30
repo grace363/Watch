@@ -469,6 +469,11 @@
                 ${{ "%.2f"|format(user.balance_usd) }}
             </div>
             <a href="/support" class="support-link">Support</a>
+            {% if session.user_id and user and user.account_type == 'Admin' %}
+            <a href="/admin_panel" class="support-link" style="color: #ff6b35; font-weight: 600;">
+                <i class="fas fa-cog"></i> Admin Panel
+            </a>
+            {% endif %}
         </div>
     </nav>
 
@@ -568,7 +573,7 @@
             <div class="progress-bar">
                 <div class="progress-fill" id="timeProgress" style="width: {{ ((user.daily_online_time or 0) / (DAILY_ONLINE_TIME or 60) * 100)|round(2) }}%"></div>
             </div>
-            <button class="claim-btn" id="claimBonusBtn" 
+            <button class="claim-btn" id="claimBonusBtn" onclick="claimDailyBonus()"
                     {% if (user.daily_online_time or 0) < (DAILY_ONLINE_TIME or 60) %}disabled{% endif %}>
                 <i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus
             </button>
@@ -684,97 +689,109 @@
         function updateTimer() {
             if (windowFocused) {
                 currentOnlineTime++;
-            }
-            
-            const timeDisplay = document.getElementById('timeDisplay');
-            const timeProgress = document.getElementById('timeProgress');
-            
-            if (timeDisplay) {
-                timeDisplay.textContent = currentOnlineTime + 's';
-            }
-            
-            if (timeProgress) {
-                const progressPercent = Math.min((currentOnlineTime / requiredTime) * 100, 100);
-                timeProgress.style.width = progressPercent + '%';
-            }
-            
-            // Enable bonus button when time is reached
-            const bonusBtn = document.getElementById('claimBonusBtn');
-            if (bonusBtn && currentOnlineTime >= requiredTime) {
-                bonusBtn.disabled = false;
+                document.getElementById('timeDisplay').textContent = currentOnlineTime + 's';
+                
+                const progress = Math.min((currentOnlineTime / requiredTime) * 100, 100);
+                document.getElementById('timeProgress').style.width = progress + '%';
+                
+                // Enable claim button when time requirement is met
+                const claimBtn = document.getElementById('claimBonusBtn');
+                if (claimBtn && currentOnlineTime >= requiredTime) {
+                    claimBtn.disabled = false;
+                }
             }
         }
 
-        // Send heartbeat to server
-        function sendHeartbeat() {
-            if (!windowFocused) return;
-            
+        // Function to claim daily bonus - NOW PROPERLY CONNECTED TO BACKEND
+        function claimDailyBonus() {
+            const claimBtn = document.getElementById('claimBonusBtn');
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             
-            fetch('/api/heartbeat', {
+            if (claimBtn.disabled) {
+                alert('You need to stay online for the required time first!');
+                return;
+            }
+            
+            // Disable button to prevent double clicks
+            claimBtn.disabled = true;
+            claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+            
+            // Make AJAX request to daily-bonus endpoint
+            fetch('/daily-bonus', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                body: JSON.stringify({
-                    type: 'daily',
-                    focus_lost: focusLostCount,
-                    online_time: currentOnlineTime
-                })
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === 'Daily bonus granted') {
+                    // Success - reload page to update balance and hide bonus section
+                    alert('Daily bonus claimed successfully! $' + ({{ DAILY_REWARD or 0.05 }}).toFixed(2) + ' added to your account.');
+                    window.location.reload();
+                } else if (data.message === 'Already claimed today') {
+                    alert('You have already claimed your daily bonus today. Come back tomorrow!');
+                    window.location.reload();
+                } else if (data.error) {
+                    alert('Error: ' + data.error);
+                    claimBtn.disabled = false;
+                    claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                }
             })
             .catch(error => {
-                console.error('Heartbeat failed:', error);
+                console.error('Error claiming daily bonus:', error);
+                alert('There was an error claiming your daily bonus. Please try again.');
+                claimBtn.disabled = false;
+                claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
             });
         }
 
-        // Claim daily bonus
-        function claimDailyBonus() {
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const bonusBtn = document.getElementById('claimBonusBtn');
-            
-            if (bonusBtn) {
-                bonusBtn.disabled = true;
-                bonusBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+        // Send heartbeat to server every few seconds
+        function sendHeartbeat() {
+            if (windowFocused) {
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
                 
-                fetch('/api/claim_daily_bonus', {
+                fetch('/heartbeat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken
-                    }
+                    },
+                    body: JSON.stringify({
+                        online_time: currentOnlineTime,
+                        focus_lost_count: focusLostCount,
+                        page: 'dashboard'
+                    }),
+                    credentials: 'same-origin'
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        bonusBtn.disabled = false;
-                        bonusBtn.innerHTML = '<i class="fas fa-gift"></i> Claim Bonus';
-                        alert(data.error || 'Failed to claim bonus');
-                    }
-                })
-                .catch(error => {
-                    bonusBtn.disabled = false;
-                    bonusBtn.innerHTML = '<i class="fas fa-gift"></i> Claim Bonus';
-                    console.error('Bonus claim failed:', error);
-                });
+                .catch(error => console.error('Heartbeat error:', error));
             }
         }
-
-        // Set up bonus button click handler
-        document.addEventListener('DOMContentLoaded', function() {
-            const bonusBtn = document.getElementById('claimBonusBtn');
-            if (bonusBtn) {
-                bonusBtn.addEventListener('click', claimDailyBonus);
-            }
-        });
 
         // Start timers
-        if (document.getElementById('onlineTimer')) {
-            setInterval(updateTimer, 1000);
-            setInterval(sendHeartbeat, sessionHeartbeatInterval);
-        }
+        setInterval(updateTimer, 1000); // Update every second
+        setInterval(sendHeartbeat, sessionHeartbeatInterval); // Send heartbeat every 5 seconds
+
+        // Initial heartbeat
+        sendHeartbeat();
+
+        // Auto-refresh balance every 30 seconds
+        setInterval(function() {
+            fetch('/api/balance', {
+                method: 'GET',
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.balance !== undefined) {
+                    document.querySelector('.balance-display').textContent = '$' + data.balance.toFixed(2);
+                    document.querySelector('.balance-amount').textContent = '$' + data.balance.toFixed(2);
+                }
+            })
+            .catch(error => console.error('Balance update error:', error));
+        }, 30000);
     </script>
 </body>
 </html>
