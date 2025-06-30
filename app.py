@@ -1013,6 +1013,7 @@ def get_youtube_embed_url(youtube_url):
         return youtube_url
 
 # Security helper function
+# Security helper function
 def check_daily_video_limit(user_id):
     """Check if user has exceeded daily video watch limit"""
     from datetime import datetime, timedelta
@@ -1023,8 +1024,8 @@ def check_daily_video_limit(user_id):
     # Count videos watched today
     videos_watched_today = WatchSession.query.filter(
         WatchSession.user_id == user_id,
-        WatchSession.created_at >= start_of_day,
-        WatchSession.completed == True
+        WatchSession.start_time >= start_of_day,
+        WatchSession.reward_given == True
     ).count()
     
     return videos_watched_today < DAILY_VIDEO_LIMIT
