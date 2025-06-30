@@ -1,117 +1,537 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Watch Video – Watch & Earn</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f4f4f4;
-      color: #333;
-      padding: 0;
-      margin: 0;
-    }
-    .video-container {
-      max-width: 800px;
-      margin: 30px auto;
-      background: #fff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    .controls, .status {
-      margin-top: 15px;
-      text-align: center;
-    }
-    .timer {
-      font-size: 18px;
-      font-weight: bold;
-    }
-    .reward-message {
-      color: green;
-      font-weight: bold;
-      margin-top: 10px;
-    }
-    .cheat-warning {
-      color: red;
-      font-weight: bold;
-      margin-top: 10px;
-    }
-  </style>
-  <script>
-    let watchStart = Date.now();
-    let focusLost = 0;
-    let watchTime = 0;
-    let interval;
-    let backPressed = false;
-    let sessionToken = '{{ session_token }}';
-    const minWatch = {{ video.min_watch_time }};
-    const maxFocusLoss = {{ anti_cheat }};function updateTimer() {
-  watchTime++;
-  document.getElementById('timer').innerText = watchTime + "s watched";
-  if (watchTime >= minWatch) {
-    clearInterval(interval);
-    document.getElementById('reward-status').innerText = "✅ You've earned a reward!";
-    sendWatchComplete();
-  }
-}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ video.title }} - Watch & Earn</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-function sendWatchComplete() {
-  fetch("/complete_watch", {
-    method: "POST",
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': '{{ csrf_token() }}'
-    },
-    body: JSON.stringify({
-      session_token: sessionToken,
-      duration: watchTime,
-      focus_lost: focusLost,
-      back_button: backPressed
-    })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.cheating) {
-      document.getElementById('reward-status').innerText = "🚨 Cheating Detected: " + data.reason;
-    }
-  });
-}
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f0f0f;
+            color: #fff;
+            line-height: 1.4;
+        }
 
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) {
-    focusLost++;
-    if (focusLost > maxFocusLoss) {
-      document.getElementById('reward-status').innerText = "❌ Too many focus losses. Session invalidated.";
-      clearInterval(interval);
-      sendWatchComplete();
-    }
-  }
-});
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
 
-window.onbeforeunload = () => {
-  backPressed = true;
-  sendWatchComplete();
-};
+        .watch-header {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
 
-window.onload = () => {
-  interval = setInterval(updateTimer, 1000);
-};
+        .video-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #fff;
+        }
 
-  </script>
+        .watch-info {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 15px;
+        }
+
+        .reward-display {
+            background: #00a152;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .video-wrapper {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio */
+            height: 0;
+            overflow: hidden;
+        }
+
+        .video-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .timer-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            z-index: 10;
+        }
+
+        .controls-panel {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .progress-section {
+            margin-bottom: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00a152, #00d862);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            color: #aaa;
+            font-size: 14px;
+        }
+
+        .claim-section {
+            display: none;
+        }
+
+        .claim-section.show {
+            display: block;
+        }
+
+        .claim-btn {
+            background: linear-gradient(135deg, #00a152, #00d862);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .claim-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 161, 82, 0.4);
+        }
+
+        .claim-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .back-btn {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .back-btn:hover {
+            background: #555;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #1b4332;
+            color: #4ade80;
+            border-color: #22c55e;
+        }
+
+        .alert-error {
+            background: #4c1d1d;
+            color: #f87171;
+            border-color: #ef4444;
+        }
+
+        .alert-warning {
+            background: #4c3d1d;
+            color: #fbbf24;
+            border-color: #f59e0b;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            .watch-info {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .video-title {
+                font-size: 20px;
+            }
+
+            .timer-overlay {
+                top: 10px;
+                right: 10px;
+                padding: 8px 12px;
+                font-size: 14px;
+            }
+        }
+
+        /* Anti-cheat styles */
+        .cheat-warning {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            text-align: center;
+        }
+
+        .cheat-warning.show {
+            display: flex;
+        }
+
+        .cheat-message {
+            background: #1a1a1a;
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 400px;
+        }
+    </style>
 </head>
 <body>
-  <div class="video-container">
-    <h2>{{ video.title }}</h2>
-    <video id="video" width="100%" controls autoplay>
-      <source src="{{ video.video_url }}" type="video/mp4">
-      Your browser does not support HTML5 video.
-    </video><div class="status">
-  <p class="timer" id="timer">0s watched</p>
-  <p class="reward-message" id="reward-status"></p>
-</div>
+    <div class="container">
+        <!-- Back Button -->
+        <a href="{{ url_for('user_dashboard') }}" class="back-btn">
+            <i class="fas fa-arrow-left"></i>
+            Back to Dashboard
+        </a>
 
-  </div>
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else 'success' if category == 'success' else 'warning' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Watch Header -->
+        <div class="watch-header">
+            <h1 class="video-title">{{ video.title }}</h1>
+            <div class="watch-info">
+                <span><i class="fas fa-clock"></i> {{ video.min_watch_time }}s required</span>
+                <span><i class="fas fa-user"></i> Added by User {{ video.added_by }}</span>
+            </div>
+            <div class="reward-display">
+                <i class="fas fa-coins"></i> Earn ${{ "%.3f"|format(video.reward_amount) }}
+            </div>
+        </div>
+
+        <!-- Video Container -->
+        <div class="video-container">
+            <div class="video-wrapper">
+                <iframe 
+                    id="youtube-player"
+                    src="{{ get_youtube_embed_url(video.video_url) }}?enablejsapi=1&autoplay=1&rel=0&showinfo=0&controls=1"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+                </iframe>
+            </div>
+            
+            <!-- Timer Overlay -->
+            <div class="timer-overlay" id="timerDisplay">
+                <i class="fas fa-stopwatch"></i>
+                <span id="timeRemaining">{{ video.min_watch_time }}</span>s
+            </div>
+        </div>
+
+        <!-- Controls Panel -->
+        <div class="controls-panel">
+            <div class="progress-section">
+                <div class="progress-text">
+                    Watch Progress: <span id="progressPercent">0</span>%
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressBar"></div>
+                </div>
+                <div class="progress-text">
+                    <span id="watchedTime">0</span>s / {{ video.min_watch_time }}s watched
+                </div>
+            </div>
+
+            <!-- Claim Section (hidden initially) -->
+            <div class="claim-section" id="claimSection">
+                <h3 style="color: #00d862; margin-bottom: 15px;">
+                    <i class="fas fa-check-circle"></i> Video Completed!
+                </h3>
+                <p style="margin-bottom: 20px; color: #aaa;">
+                    Congratulations! You've earned your reward.
+                </p>
+                <button class="claim-btn" id="claimRewardBtn">
+                    <i class="fas fa-coins"></i> Claim ${{ "%.3f"|format(video.reward_amount) }}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anti-cheat Warning -->
+    <div class="cheat-warning" id="cheatWarning">
+        <div class="cheat-message">
+            <i class="fas fa-exclamation-triangle" style="color: #f59e0b; font-size: 48px; margin-bottom: 20px;"></i>
+            <h3>Stay Focused!</h3>
+            <p>Please keep this tab active and focused to earn your reward.</p>
+            <button onclick="hideCheatWarning()" style="margin-top: 20px; padding: 10px 20px; background: #333; color: white; border: none; border-radius: 20px; cursor: pointer;">
+                Continue Watching
+            </button>
+        </div>
+    </div>
+
+    <!-- CSRF Token -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <script>
+        // Watch session configuration
+        const sessionToken = '{{ session_token }}';
+        const videoId = {{ video.id }};
+        const minWatchTime = {{ video.min_watch_time }};
+        const rewardAmount = {{ video.reward_amount }};
+        
+        // Timer variables
+        let watchStartTime = Date.now();
+        let currentWatchTime = 0;
+        let timerInterval;
+        let heartbeatInterval;
+        let isVideoCompleted = false;
+        let windowFocused = true;
+        let focusLostCount = 0;
+        
+        // DOM elements
+        const timerDisplay = document.getElementById('timeRemaining');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const watchedTimeSpan = document.getElementById('watchedTime');
+        const claimSection = document.getElementById('claimSection');
+        const claimBtn = document.getElementById('claimRewardBtn');
+        const cheatWarning = document.getElementById('cheatWarning');
+
+        // Anti-cheat: Track window focus
+        window.addEventListener('focus', function() {
+            windowFocused = true;
+            hideCheatWarning();
+        });
+
+        window.addEventListener('blur', function() {
+            windowFocused = false;
+            focusLostCount++;
+            if (focusLostCount > 2 && !isVideoCompleted) {
+                showCheatWarning();
+            }
+        });
+
+        // Show/hide cheat warning
+        function showCheatWarning() {
+            cheatWarning.classList.add('show');
+        }
+
+        function hideCheatWarning() {
+            cheatWarning.classList.remove('show');
+        }
+
+        // Start watch timer
+        function startWatchTimer() {
+            timerInterval = setInterval(function() {
+                if (windowFocused && !isVideoCompleted) {
+                    currentWatchTime++;
+                    updateTimerDisplay();
+                    updateProgress();
+                    
+                    // Check if minimum watch time reached
+                    if (currentWatchTime >= minWatchTime) {
+                        completeWatch();
+                    }
+                }
+            }, 1000);
+        }
+
+        // Update timer display
+        function updateTimerDisplay() {
+            const remaining = Math.max(0, minWatchTime - currentWatchTime);
+            timerDisplay.textContent = remaining;
+            watchedTimeSpan.textContent = currentWatchTime;
+        }
+
+        // Update progress bar
+        function updateProgress() {
+            const progress = Math.min(100, (currentWatchTime / minWatchTime) * 100);
+            progressBar.style.width = progress + '%';
+            progressPercent.textContent = Math.round(progress);
+        }
+
+        // Complete watch session
+        function completeWatch() {
+            if (isVideoCompleted) return;
+            
+            isVideoCompleted = true;
+            clearInterval(timerInterval);
+            
+            // Show claim section
+            claimSection.classList.add('show');
+            
+            // Update timer display to show completion
+            timerDisplay.textContent = '0';
+            progressBar.style.width = '100%';
+            progressPercent.textContent = '100';
+        }
+
+        // Send heartbeat to server
+        function sendHeartbeat() {
+            if (!windowFocused || isVideoCompleted) return;
+            
+            fetch('/watch_heartbeat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({
+                    session_token: sessionToken,
+                    watch_time: currentWatchTime,
+                    focus_lost_count: focusLostCount
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    console.error('Heartbeat failed:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Heartbeat error:', error);
+            });
+        }
+
+        // Claim reward
+        function claimReward() {
+            if (!isVideoCompleted) {
+                alert('Please finish watching the video first!');
+                return;
+            }
+            
+            claimBtn.disabled = true;
+            claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            
+            fetch('/claim_reward', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({
+                    session_token: sessionToken,
+                    video_id: videoId,
+                    watch_time: currentWatchTime
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Congratulations! You earned $${rewardAmount.toFixed(3)}!`);
+                    window.location.href = '/dashboard';
+                } else {
+                    alert('Error claiming reward: ' + data.message);
+                    claimBtn.disabled = false;
+                    claimBtn.innerHTML = '<i class="fas fa-coins"></i> Claim $' + rewardAmount.toFixed(3);
+                }
+            })
+            .catch(error => {
+                console.error('Claim error:', error);
+                alert('An error occurred while claiming your reward.');
+                claimBtn.disabled = false;
+                claimBtn.innerHTML = '<i class="fas fa-coins"></i> Claim $' + rewardAmount.toFixed(3);
+            });
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Start timer and heartbeat
+            startWatchTimer();
+            heartbeatInterval = setInterval(sendHeartbeat, 5000);
+            
+            // Claim button event
+            claimBtn.addEventListener('click', claimReward);
+            
+            // Prevent back button during watch
+            window.addEventListener('beforeunload', function(e) {
+                if (!isVideoCompleted) {
+                    e.preventDefault();
+                    e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
+                }
+            });
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            clearInterval(timerInterval);
+            clearInterval(heartbeatInterval);
+        });
+    </script>
 </body>
 </html>
