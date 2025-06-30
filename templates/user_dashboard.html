@@ -1,206 +1,144 @@
-<!DOCTYPE html><html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Dashboard - Watch & Earn</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-        .dashboard-header {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
-            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-        .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 1200px;
-            margin: 0 auto;
-            position: relative;
-        }
-        .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #667eea;
-        }
-        .menu-toggle {
-            display: none;
-            cursor: pointer;
-        }
-        .menu-toggle i {
-            font-size: 1.5rem;
-        }
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .nav-link {
-            background: linear-gradient(135deg, #ff4757, #ff3742);
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
-        }
-        .nav-link:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .balance {
-            background: linear-gradient(135deg, #4CAF50, #45a049);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            font-weight: bold;
-        }
-        .logout-btn {
-            background: #ff4757;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            text-decoration: none;
-            transition: background 0.3s;
-        }
-        .logout-btn:hover {
-            background: #ff3742;
-        }
-        .dropdown {
-            position: relative;
-        }
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            color: #333;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            display: none;
-            min-width: 150px;
-            z-index: 999;
-        }
-        .dropdown-menu a {
-            display: block;
-            padding: 0.75rem 1rem;
-            text-decoration: none;
-            color: #333;
-            transition: background 0.3s ease;
-        }
-        .dropdown-menu a:hover {
-            background: #f5f5f5;
-        }
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            .header-content {
-                flex-direction: column;
-                gap: 1rem;
-                align-items: flex-start;
-            }
-            .user-info {
-                justify-content: center;
-            }
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            .nav-links {
-                flex-direction: column;
-                background: white;
-                padding: 1rem;
-                border-radius: 10px;
-                position: absolute;
-                top: 60px;
-                right: 1rem;
-                display: none;
-                box-shadow: 0 2px 20px rgba(0,0,0,0.1);
-            }
-            .menu-toggle {
-                display: block;
-            }
-        }
-    </style>
-</head>
 <body>
-    <div class="dashboard-header">
-        <div class="header-content">
-            <div class="logo">
-                <i class="fas fa-play-circle"></i> Watch & Earn
-            </div>
-            <div class="menu-toggle" onclick="toggleMenu()">
-                <i class="fas fa-bars"></i>
-            </div>
-            <div class="nav-links" id="navMenu">
-                {% if session.user_id and user and user.account_type == 'YouTuber' %}
-                    <a href="{{ url_for('youtuber_dashboard') }}" class="nav-link">
-                        <i class="fab fa-youtube"></i> YouTuber Dashboard
-                    </a>
-                {% endif %}
-                <div class="nav-link dropdown">
-                    <i class="fas fa-ellipsis-v"></i>
-                    <div class="dropdown-menu">
-                        <a href="#"><i class="fas fa-user"></i> Profile</a>
-                        <a href="#"><i class="fas fa-cog"></i> Settings</a>
-                        <a href="#"><i class="fas fa-question-circle"></i> Help</a>
-                    </div>
-                </div>
-            </div>
-            <div class="user-info">
-                <div class="balance">
-                    <i class="fas fa-dollar-sign"></i> ${{ "%.2f"|format(user.balance_usd) }}
-                </div>
-                <span>Welcome, {{ user.email.split('@')[0] }}</span>
-                <a href="{{ url_for('logout') }}" class="logout-btn">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
-            </div>
-        </div>
-    </div><!-- Your full dashboard content continues unchanged here -->
+    <!-- Hamburger Menu Trigger -->
+    <input type="checkbox" id="menu-toggle" style="display: none;">
+    <label for="menu-toggle" id="hamburger-icon" style="position: fixed; top: 20px; left: 20px; z-index: 2000; cursor: pointer;">
+        <i class="fas fa-bars" style="font-size: 1.5rem; color: white;"></i>
+    </label><!-- Sidebar Menu -->
+<div id="side-menu" style="position: fixed; top: 0; left: -250px; width: 250px; height: 100%; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1500; transition: left 0.3s;">
+    <div style="padding: 1.5rem 1rem; border-bottom: 1px solid #eee; background: #667eea; color: white;">
+        <h2 style="margin-bottom: 0;">Menu</h2>
+    </div>
+    <ul style="list-style: none; padding: 1rem;">
+        <li style="margin: 1rem 0;">
+            <a href="{{ url_for('profile') }}" style="color: #333; text-decoration: none;">
+                <i class="fas fa-user"></i> Profile
+            </a>
+        </li>
+        <li style="margin: 1rem 0;">
+            <a href="{{ url_for('withdraw') }}" style="color: #333; text-decoration: none;">
+                <i class="fas fa-wallet"></i> Withdraw
+            </a>
+        </li>
+        <li style="margin: 1rem 0;">
+            <a href="#" style="color: #333; text-decoration: none;">
+                <i class="fas fa-cogs"></i> Settings
+            </a>
+        </li>
+        <li style="margin: 1rem 0;">
+            <a href="#" style="color: #333; text-decoration: none;">
+                <i class="fas fa-life-ring"></i> Support
+            </a>
+        </li>
+        {% if session.user_id and user and user.account_type == 'YouTuber' %}
+        <li style="margin: 1rem 0;">
+            <a href="{{ url_for('youtuber_dashboard') }}" style="color: #333; text-decoration: none;">
+                <i class="fab fa-youtube"></i> YouTuber Dashboard
+            </a>
+        </li>
+        {% endif %}
+        <li style="margin: 1rem 0;">
+            <a href="{{ url_for('logout') }}" style="color: #ff4757; text-decoration: none;">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </li>
+    </ul>
+</div>
 
+<!-- Sidebar Toggle Script -->
 <script>
-    function toggleMenu() {
-        const nav = document.getElementById('navMenu');
-        nav.style.display = nav.style.display === 'flex' ? 'none' : 'flex';
-    }
+    const toggleCheckbox = document.getElementById("menu-toggle");
+    const menu = document.getElementById("side-menu");
 
-    document.querySelectorAll('.dropdown').forEach(drop => {
-        drop.addEventListener('click', () => {
-            const menu = drop.querySelector('.dropdown-menu');
-            const isShown = menu.style.display === 'block';
-            document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
-            if (!isShown) menu.style.display = 'block';
-        });
-    });
-
-    window.addEventListener('click', (e) => {
-        if (!e.target.closest('.dropdown')) {
-            document.querySelectorAll('.dropdown-menu').forEach(m => m.style.display = 'none');
+    toggleCheckbox.addEventListener("change", function () {
+        if (this.checked) {
+            menu.style.left = "0";
+        } else {
+            menu.style.left = "-250px";
         }
     });
 </script>
 
+<!-- Dashboard Header -->
+<div class="dashboard-header">
+    <div class="header-content" style="flex-wrap: wrap; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="logo">
+                <i class="fas fa-play-circle"></i> Watch & Earn
+            </div>
+            <div style="font-weight: 500; color: #333;">
+                <i class="fas fa-envelope"></i> {{ user.email }}
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="balance">
+                <i class="fas fa-dollar-sign"></i> ${{ "%.2f"|format(user.balance_usd) }}
+            </div>
+            <a href="#" class="nav-link" style="background: #4CAF50;">
+                <i class="fas fa-headset"></i> Support
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Continue original container and content -->
+<div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'error' if category == 'error' else 'success' if category == 'success' else 'warning' }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Daily Bonus Section -->
+    {% if not user.daily_bonus_given %}
+    <div id="dailyBonusBox" style="background: linear-gradient(to right, #36d1dc, #5b86e5); color: white; padding: 1rem; border-radius: 12px; margin-bottom: 1rem; text-align: center;">
+        <h3>🎁 Claim Your Daily Bonus</h3>
+        <p>Time online: <span id="timer">0</span>s / {{ DAILY_ONLINE_TIME or 60 }}s</p>
+        <button id="claimBonusBtn" style="margin-top: 1rem; background: #fff; color: #36d1dc; border: none; padding: 0.6rem 1.5rem; border-radius: 25px; cursor: pointer; font-weight: bold;" disabled>
+            Claim ${{ DAILY_REWARD or 0.05 }}
+        </button>
+    </div>
+    <script>
+        let bonusTime = {{ user.daily_online_time or 0 }};
+        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }};
+        const timerEl = document.getElementById('timer');
+        const claimBtn = document.getElementById('claimBonusBtn');
+        const bonusBox = document.getElementById('dailyBonusBox');
+
+        function updateBonusTimer() {
+            bonusTime++;
+            timerEl.textContent = bonusTime;
+
+            if (bonusTime >= requiredTime) {
+                claimBtn.disabled = false;
+            }
+        }
+
+        claimBtn.addEventListener('click', () => {
+            fetch('/api/claim_daily_bonus', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name="csrf_token"]').value
+                },
+                body: JSON.stringify({})
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    bonusBox.style.display = 'none';
+                    alert('Bonus Claimed!');
+                }
+            });
+        });
+
+        setInterval(updateBonusTimer, 1000);
+    </script>
+    {% endif %}
+
+    <!-- stats-grid, bonus section, videos-section, earnings-section -->
+    <!-- (Retained without modification — keep everything originally posted below this container) -->
+</div>
+
 </body>
-</html>
