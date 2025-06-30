@@ -13,6 +13,9 @@ from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 import firebase_admin 
 from firebase_admin import credentials, firestore 
 from werkzeug.security import generate_password_hash, check_password_hash
+import uuid
+from werkzeug.utils import secure_filename
+from pathlib import Path
 
 #==== Flask App Config ====
 
@@ -719,7 +722,231 @@ def user_dashboard():
                          videos_remaining=MAX_VIDEOS_PER_DAY - user.videos_watched_today,
                          time_until_daily_bonus=time_until_daily_bonus)
 
-# New restrictive watch and earn routes
+# Configuration for file uploads - moved to environment variables
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads/videos')
+ALLOWED_EXTENSIONS = set(os.environ.get('ALLOWED_EXTENSIONS', 'mp4,avi,mov,wmv,flv,webm,mkv').split(','))
+MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', str(500 * 1024 * 1024)))  # Default 500MB
+VIDEO_WATCH_TIME = int(os.environ.get('VIDEO_WATCH_TIME', '30'))  # Default 30 seconds
+VIDEO_REWARD_AMOUNT = float(os.environ.get('VIDEO_REWARD_AMOUNT', '0.01'))  # Default $0.01
+DAILY_VIDEO_LIMIT = int(os.environ.get('DAILY_VIDEO_LIMIT', '50'))  # Default 50 videos per day
+MAX_FILE_SIZE_MB = int(os.environ.get('MAX_FILE_SIZE_MB', '500'))  # Default 500MB
+
+# Add to your app configuration
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+# Create upload directory if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_file_size_mb(file_path):
+    """Get file size in MB"""
+    try:
+        size_bytes = os.path.getsize(file_path)
+        size_mb = size_bytes / (1024 * 1024)
+        return round(size_mb, 2)
+    except:
+        return 0
+
+# Admin Panel Route (ADD THIS TO YOUR APP.PY)
+@app.route('/admin_panel')
+def admin_panel():
+    """Admin panel for managing videos"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'Admin':
+        flash('❌ Admin access required!', 'error')
+        return redirect(url_for('user_dashboard'))
+    
+    # Get all videos for management
+    videos = Video.query.order_by(Video.timestamp.desc()).all()
+    
+    # Get system stats
+    total_users = User.query.count()
+    total_videos = Video.query.count()
+    active_videos = Video.query.filter_by(is_active=True).count()
+    total_earnings = db.session.query(db.func.sum(User.balance_usd)).scalar() or 0
+    
+    return render_template('admin_panel.html', 
+                         videos=videos,
+                         total_users=total_users,
+                         total_videos=total_videos,
+                         active_videos=active_videos,
+                         total_earnings=total_earnings,
+                         max_file_size=MAX_FILE_SIZE_MB,
+                         allowed_extensions=ALLOWED_EXTENSIONS,
+                         default_watch_time=VIDEO_WATCH_TIME,
+                         default_reward=VIDEO_REWARD_AMOUNT)
+
+# Admin Video Upload Route (REPLACE YOUR EXISTING add_video ROUTE)
+@app.route('/admin_add_video', methods=['POST'])
+@limiter.limit(os.environ.get('ADMIN_UPLOAD_RATE_LIMIT', '5 per minute'))
+def admin_add_video():
+    """Admin route to add video files"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'Admin':
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+    
+    try:
+        # Get form data
+        title = request.form.get('title', '').strip()
+        min_watch_time = int(request.form.get('min_watch_time', VIDEO_WATCH_TIME))
+        reward_amount = float(request.form.get('reward_amount', VIDEO_REWARD_AMOUNT))
+        video_type = request.form.get('video_type', 'file')  # 'file' or 'youtube'
+        
+        # Validation with configurable limits
+        title_max_length = int(os.environ.get('VIDEO_TITLE_MAX_LENGTH', '200'))
+        min_watch_time_limit = int(os.environ.get('MIN_WATCH_TIME_LIMIT', '10'))
+        max_watch_time_limit = int(os.environ.get('MAX_WATCH_TIME_LIMIT', '300'))
+        min_reward_amount = float(os.environ.get('MIN_REWARD_AMOUNT', '0.001'))
+        max_reward_amount = float(os.environ.get('MAX_REWARD_AMOUNT', '1.0'))
+        
+        if not title or len(title) > title_max_length:
+            flash(f'Video title is required and must be less than {title_max_length} characters.', 'error')
+            return redirect(url_for('admin_panel'))
+        
+        if min_watch_time < min_watch_time_limit or min_watch_time > max_watch_time_limit:
+            flash(f'Watch time must be between {min_watch_time_limit} and {max_watch_time_limit} seconds.', 'error')
+            return redirect(url_for('admin_panel'))
+        
+        if reward_amount < min_reward_amount or reward_amount > max_reward_amount:
+            flash(f'Reward amount must be between ${min_reward_amount} and ${max_reward_amount}.', 'error')
+            return redirect(url_for('admin_panel'))
+        
+        video_url = None
+        video_filename = None
+        
+        if video_type == 'file':
+            # Handle file upload
+            if 'video_file' not in request.files:
+                flash('No video file selected.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            file = request.files['video_file']
+            if file.filename == '':
+                flash('No video file selected.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            if not allowed_file(file.filename):
+                flash(f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            # Generate unique filename
+            original_filename = secure_filename(file.filename)
+            file_extension = original_filename.rsplit('.', 1)[1].lower()
+            unique_filename = f"{uuid.uuid4().hex}.{file_extension}"
+            
+            # Save file
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(file_path)
+            
+            # Check file size
+            file_size_mb = get_file_size_mb(file_path)
+            if file_size_mb > MAX_FILE_SIZE_MB:
+                os.remove(file_path)  # Delete the file
+                flash(f'File size too large. Maximum {MAX_FILE_SIZE_MB}MB allowed.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            video_filename = unique_filename
+            video_url = f"/static/uploads/videos/{unique_filename}"
+            
+        else:  # YouTube URL
+            video_url = request.form.get('video_url', '').strip()
+            if not video_url:
+                flash('Video URL is required.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            # Validate YouTube URL with configurable domains
+            allowed_domains = os.environ.get('ALLOWED_VIDEO_DOMAINS', 'youtube.com,youtu.be').split(',')
+            is_valid_url = any(domain in video_url for domain in allowed_domains)
+            
+            if not is_valid_url:
+                flash(f'Please provide a valid video URL from: {", ".join(allowed_domains)}', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            # Check for duplicate URLs
+            existing_video = Video.query.filter_by(video_url=video_url).first()
+            if existing_video:
+                flash('This video URL has already been added.', 'warning')
+                return redirect(url_for('admin_panel'))
+        
+        # Create new video
+        new_video = Video(
+            title=title,
+            video_url=video_url,
+            video_filename=video_filename,  # Store filename for file uploads
+            video_type=video_type,  # Store type (file or youtube)
+            added_by=user.id,
+            min_watch_time=min_watch_time,
+            reward_amount=reward_amount,
+            is_active=True,
+            timestamp=datetime.utcnow()
+        )
+        
+        db.session.add(new_video)
+        db.session.commit()
+        
+        # Log the action
+        log_user_ip(user.id, "admin_video_upload")
+        
+        flash(f'Video "{title}" has been added successfully!', 'success')
+        return redirect(url_for('admin_panel'))
+        
+    except ValueError as e:
+        flash('Invalid number format in watch time or reward amount.', 'error')
+        return redirect(url_for('admin_panel'))
+    except Exception as e:
+        print(f"❌ Error adding video: {str(e)}")
+        db.session.rollback()
+        flash('An error occurred while adding the video. Please try again.', 'error')
+        return redirect(url_for('admin_panel'))
+
+# Admin Delete Video Route
+@app.route('/admin_delete_video/<int:video_id>', methods=['POST'])
+def admin_delete_video(video_id):
+    """Admin route to delete videos"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'Admin':
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+    
+    try:
+        video = Video.query.get_or_404(video_id)
+        
+        # Delete physical file if it exists
+        if video.video_filename and video.video_type == 'file':
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], video.video_filename)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError as e:
+                    print(f"Warning: Could not delete file {file_path}: {e}")
+        
+        # Delete video record
+        db.session.delete(video)
+        db.session.commit()
+        
+        flash('Video deleted successfully!', 'success')
+        return redirect(url_for('admin_panel'))
+        
+    except Exception as e:
+        print(f"❌ Error deleting video: {str(e)}")
+        db.session.rollback()
+        flash('Error deleting video.', 'error')
+        return redirect(url_for('admin_panel'))
+
+# Update your existing watch_video route to handle both file types
 @app.route('/watch_video/<int:video_id>')
 def watch_video(video_id):
     if 'user_id' not in session:
@@ -730,7 +957,7 @@ def watch_video(video_id):
         return redirect(url_for('login'))
     
     if not check_daily_video_limit(user.id):
-        flash('❌ Daily video limit reached. Come back tomorrow!', 'error')
+        flash(f'❌ Daily video limit ({DAILY_VIDEO_LIMIT}) reached. Come back tomorrow!', 'error')
         return redirect(url_for('user_dashboard'))
     
     video = Video.query.get_or_404(video_id)
@@ -755,6 +982,51 @@ def watch_video(video_id):
                          video=video, 
                          session_token=session_token,
                          min_watch_time=VIDEO_WATCH_TIME)
+
+# Helper function for templates
+def get_youtube_embed_url(youtube_url):
+    """Convert YouTube URL to embed URL"""
+    try:
+        if 'youtube.com/watch' in youtube_url:
+            video_id = youtube_url.split('v=')[1].split('&')[0]
+        elif 'youtu.be/' in youtube_url:
+            video_id = youtube_url.split('youtu.be/')[1].split('?')[0]
+        else:
+            return youtube_url
+        
+        return f"https://www.youtube.com/embed/{video_id}"
+    except:
+        return youtube_url
+
+# Security helper function
+def check_daily_video_limit(user_id):
+    """Check if user has exceeded daily video watch limit"""
+    from datetime import datetime, timedelta
+    
+    today = datetime.utcnow().date()
+    start_of_day = datetime.combine(today, datetime.min.time())
+    
+    # Count videos watched today
+    videos_watched_today = WatchSession.query.filter(
+        WatchSession.user_id == user_id,
+        WatchSession.created_at >= start_of_day,
+        WatchSession.completed == True
+    ).count()
+    
+    return videos_watched_today < DAILY_VIDEO_LIMIT
+
+# Make helper functions available in templates
+@app.context_processor
+def utility_processor():
+    return dict(
+        get_youtube_embed_url=get_youtube_embed_url,
+        get_file_size_mb=get_file_size_mb,
+        max_file_size_mb=MAX_FILE_SIZE_MB,
+        allowed_extensions=ALLOWED_EXTENSIONS,
+        video_watch_time=VIDEO_WATCH_TIME,
+        video_reward_amount=VIDEO_REWARD_AMOUNT,
+        daily_video_limit=DAILY_VIDEO_LIMIT
+    )
 
 @app.route('/api/heartbeat', methods=['POST'])
 def heartbeat():
