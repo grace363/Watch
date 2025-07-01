@@ -230,6 +230,8 @@ class User(db.Model):
     session_start_time = db.Column(db.DateTime)
     last_heartbeat = db.Column(db.DateTime)
     last_bonus_claim = db.column(db.DateTime) #when bonus was last claimed
+    last_activity_date = db.column(db.date, default=datetime.utcnow().date)
+    current_session_start = db.column(db.Date)
 
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
