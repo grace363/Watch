@@ -19,6 +19,7 @@ from pathlib import Path
 from flask import session, jsonify, request 
 import logging 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text
+from sqlalchemy import Date
 
 #==== Flask App Config ====
 
