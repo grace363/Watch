@@ -1524,7 +1524,7 @@ def utility_processor():
 
 @app.route('/api/heartbeat', methods=['POST'])
 def heartbeat():
-    """Keep track of user activity and session"""
+    """Keep track of user activity and session with enhanced anti-cheat"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
     
@@ -1535,36 +1535,102 @@ def heartbeat():
         focus_lost = data.get('focus_lost', 0)
         back_button = data.get('back_button', False)
         
+        # Get additional anti-cheat data
+        mouse_data = data.get('mouse_data', {})
+        keyboard_data = data.get('keyboard_data', {})
+        screen_data = data.get('screen_data', {})
+        behavioral_data = data.get('behavioral_data', {})
+        
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+        
+        # Update device fingerprint if changed
+        update_device_fingerprint(user_id, screen_data, user_agent)
+        
+        # Check for proxy/VPN
+        is_proxy = detect_proxy_vpn(user_ip)
+        if is_proxy:
+            log_security_event(user_id, 'proxy_detected', 'medium', 
+                             f'Proxy/VPN detected from IP: {user_ip}')
+        
         if session_type == 'video' and session_token:
             watch_session = WatchSession.query.filter_by(session_token=session_token).first()
-            if watch_session and watch_session.user_id == session['user_id']:
+            if watch_session and watch_session.user_id == user_id:
+                # Update basic session data
                 watch_session.focus_lost_count = focus_lost
                 watch_session.back_button_pressed = back_button
                 watch_session.watch_duration = data.get('watch_duration', 0)
+                watch_session.user_agent = user_agent
+                watch_session.ip_address = user_ip
                 
-                # Check for cheating
-                if back_button:
+                # Store mouse movement data for bot detection
+                if mouse_data:
+                    store_mouse_movements(watch_session.id, mouse_data)
+                
+                # Store keystroke patterns
+                if keyboard_data:
+                    store_keystroke_patterns(user_id, session_token, keyboard_data)
+                
+                # Advanced cheat detection
+                cheat_detected, cheat_reasons = advanced_cheat_detection(
+                    watch_session, mouse_data, behavioral_data, is_proxy
+                )
+                
+                if cheat_detected:
                     watch_session.cheating_detected = True
-                    watch_session.cheat_reason = "Back button pressed"
+                    watch_session.cheat_reason = '; '.join(cheat_reasons)
+                    watch_session.is_suspicious = True
+                    
+                    # Log security event
+                    log_security_event(user_id, 'cheating_detected', 'high', 
+                                     f'Cheating detected: {"; ".join(cheat_reasons)}')
+                    
+                    # Update user risk score
+                    update_user_risk_score(user_id, cheat_reasons)
+                
+                # Calculate and store risk score
+                risk_score = calculate_session_risk_score(watch_session, mouse_data, behavioral_data)
+                store_risk_score(user_id, watch_session.id, risk_score)
                 
                 db.session.commit()
-                return jsonify({'success': True, 'cheating': watch_session.cheating_detected})
+                return jsonify({
+                    'success': True, 
+                    'cheating': watch_session.cheating_detected,
+                    'risk_level': risk_score.get('risk_level', 'low'),
+                    'suspicious': watch_session.is_suspicious
+                })
         
         elif session_type == 'daily':
-            # Update daily session
-            user = User.query.get(session['user_id'])
+            # Update daily session with enhanced tracking
+            user = User.query.get(user_id)
             user.last_heartbeat = datetime.utcnow()
+            user.last_ip_address = user_ip
+            
+            # Update geolocation data
+            update_user_geolocation(user_id, user_ip)
             
             # Calculate online time
             if user.session_start_time:
                 online_time = (datetime.utcnow() - user.session_start_time).total_seconds()
                 user.daily_online_time = min(int(online_time), DAILY_ONLINE_TIME)
             
+            # Update behavioral scores
+            update_behavioral_scores(user, behavioral_data)
+            
+            # Check for automation/bot behavior
+            if detect_automation(behavioral_data, mouse_data):
+                user.automation_detected = True
+                log_security_event(user_id, 'automation_detected', 'high', 
+                                 'Bot-like behavior detected during daily session')
+            
             db.session.commit()
             return jsonify({
                 'success': True, 
                 'online_time': user.daily_online_time,
-                'required_time': DAILY_ONLINE_TIME
+                'required_time': DAILY_ONLINE_TIME,
+                'risk_level': user.risk_level,
+                'automation_detected': user.automation_detected
             })
             
         return jsonify({'error': 'Invalid session'}), 400
@@ -1575,7 +1641,7 @@ def heartbeat():
 
 @app.route('/api/complete_video', methods=['POST'])
 def complete_video():
-    """Complete video watch and give reward if conditions are met"""
+    """Complete video watch with advanced fraud detection"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
     
@@ -1583,10 +1649,15 @@ def complete_video():
         data = request.get_json()
         session_token = data.get('session_token')
         watch_duration = data.get('watch_duration', 0)
+        final_mouse_data = data.get('mouse_data', {})
+        completion_data = data.get('completion_data', {})
+        
+        user_id = session['user_id']
+        user_ip = request.remote_addr
         
         watch_session = WatchSession.query.filter_by(session_token=session_token).first()
         
-        if not watch_session or watch_session.user_id != session['user_id']:
+        if not watch_session or watch_session.user_id != user_id:
             return jsonify({'error': 'Invalid session'}), 400
         
         if watch_session.reward_given:
@@ -1595,56 +1666,104 @@ def complete_video():
         # Complete the session
         watch_session.end_time = datetime.utcnow()
         watch_session.watch_duration = watch_duration
+        watch_session.is_completed = True
         
-        # Detect cheating
-        cheating_detected, cheat_reasons = detect_cheating(watch_session)
+        # Enhanced fraud detection
+        fraud_detected, fraud_reasons = comprehensive_fraud_detection(
+            watch_session, final_mouse_data, completion_data, user_ip
+        )
         
-        if cheating_detected:
+        # ML-based fraud probability
+        ml_fraud_prob = calculate_ml_fraud_probability(watch_session, user_id)
+        
+        # Final risk assessment
+        final_risk = calculate_final_risk_score(watch_session, ml_fraud_prob, fraud_reasons)
+        
+        user = User.query.get(user_id)
+        
+        if fraud_detected or final_risk['risk_level'] in ['high', 'critical']:
             watch_session.cheating_detected = True
-            watch_session.cheat_reason = '; '.join(cheat_reasons)
+            watch_session.cheat_reason = '; '.join(fraud_reasons)
+            watch_session.is_suspicious = True
             
-            # Increase user's cheat violations
-            user = User.query.get(session['user_id'])
+            # Update user fraud tracking
             user.cheat_violations += 1
+            user.suspicious_activity_count += 1
+            user.ml_fraud_probability = ml_fraud_prob
+            user.risk_level = final_risk['risk_level']
+            user.last_risk_assessment = datetime.utcnow()
             
-            # Ban user if too many violations
-            if user.cheat_violations >= 5:
-                ban_user(user.id, "Multiple cheating violations")
+            # Log comprehensive security event
+            log_security_event(user_id, 'video_fraud_detected', 'critical', 
+                             f'Video completion fraud: {"; ".join(fraud_reasons)}',
+                             additional_data={
+                                 'session_token': session_token,
+                                 'ml_fraud_prob': ml_fraud_prob,
+                                 'final_risk': final_risk,
+                                 'watch_duration': watch_duration
+                             })
+            
+            # Progressive banning system
+            ban_result = check_progressive_ban(user)
+            if ban_result['should_ban']:
+                ban_user(user.id, ban_result['reason'])
                 db.session.commit()
                 session.clear()
-                return jsonify({'error': 'Account banned for cheating', 'banned': True}), 403
+                return jsonify({
+                    'error': 'Account banned for repeated fraud attempts', 
+                    'banned': True,
+                    'reason': ban_result['reason']
+                }), 403
             
             db.session.commit()
             return jsonify({
-                'error': 'Cheating detected: ' + '; '.join(cheat_reasons),
-                'violations': user.cheat_violations
+                'error': 'Fraud detected: ' + '; '.join(fraud_reasons),
+                'violations': user.cheat_violations,
+                'risk_level': user.risk_level,
+                'ml_fraud_probability': ml_fraud_prob
             }), 400
         
-        # Give reward
-        user = User.query.get(session['user_id'])
+        # Legitimate completion - give reward
         video = Video.query.get(watch_session.video_id)
         
-        user.balance_usd += video.reward_amount
+        # Apply dynamic reward based on risk (lower risk = higher reward)
+        base_reward = video.reward_amount
+        risk_multiplier = get_risk_reward_multiplier(final_risk['risk_level'])
+        final_reward = base_reward * risk_multiplier
+        
+        user.balance_usd += final_reward
         user.videos_watched_today += 1
         user.total_watch_minutes += int(watch_duration // 60)
+        user.total_watch_time += int(watch_duration)
+        
+        # Update positive behavioral scores
+        update_positive_behavioral_scores(user, watch_session)
         
         watch_session.reward_given = True
         
-        # Log earning
+        # Log earning with enhanced data
         earning = Earning(
             user_id=user.id,
-            amount=video.reward_amount,
+            amount=final_reward,
             source='watch',
             video_id=video.id
         )
         db.session.add(earning)
+        
+        # Store final risk score
+        store_risk_score(user_id, watch_session.id, final_risk, ml_fraud_prob)
+        
         db.session.commit()
         
         return jsonify({
             'success': True,
-            'reward': video.reward_amount,
+            'reward': final_reward,
+            'base_reward': base_reward,
+            'risk_multiplier': risk_multiplier,
             'new_balance': user.balance_usd,
-            'videos_remaining': MAX_VIDEOS_PER_DAY - user.videos_watched_today
+            'videos_remaining': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
+            'risk_level': final_risk['risk_level'],
+            'behavioral_score': user.behavioral_score
         })
         
     except Exception as e:
@@ -1654,17 +1773,44 @@ def complete_video():
 
 @app.route('/api/claim_daily_bonus', methods=['POST'])
 def claim_daily_bonus():
-    """Claim daily bonus if user stayed online for required time"""
+    """Claim daily bonus with comprehensive fraud prevention"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
     
     try:
-        user = User.query.get(session['user_id'])
+        data = request.get_json()
+        behavioral_data = data.get('behavioral_data', {})
+        device_data = data.get('device_data', {})
+        
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+        
+        user = User.query.get(user_id)
         
         if not user or user.is_banned:
             return jsonify({'error': 'Account unavailable'}), 403
         
-        # CRITICAL FIX: Reset daily data if it's a new day
+        # Enhanced fraud detection for daily bonus
+        fraud_detected, fraud_reasons = detect_daily_bonus_fraud(
+            user, user_ip, user_agent, behavioral_data, device_data
+        )
+        
+        if fraud_detected:
+            user.suspicious_activity_count += 1
+            user.risk_level = 'high'
+            
+            log_security_event(user_id, 'daily_bonus_fraud', 'high',
+                             f'Daily bonus fraud attempt: {"; ".join(fraud_reasons)}')
+            
+            db.session.commit()
+            return jsonify({
+                'error': 'Suspicious activity detected',
+                'reasons': fraud_reasons,
+                'risk_level': user.risk_level
+            }), 400
+        
+        # Reset daily data if needed
         user = reset_daily_data_if_needed(user)
         
         # Get today's date for comparison
@@ -1674,18 +1820,24 @@ def claim_daily_bonus():
         if user.daily_bonus_given and user.last_bonus_date == today:
             return jsonify({'error': 'Daily bonus already claimed today'}), 400
         
-        # Check if user has enough online time
-        if user.daily_online_time < DAILY_ONLINE_TIME:
+        # Enhanced online time verification
+        verified_online_time = verify_online_time_legitimacy(user, behavioral_data)
+        
+        if verified_online_time < DAILY_ONLINE_TIME:
             return jsonify({
-                'error': f'Need to stay online for {DAILY_ONLINE_TIME} seconds. You have {user.daily_online_time} seconds.',
+                'error': f'Insufficient verified online time: {verified_online_time}s of {DAILY_ONLINE_TIME}s required',
                 'required': DAILY_ONLINE_TIME,
-                'current': user.daily_online_time
+                'verified': verified_online_time,
+                'claimed': user.daily_online_time
             }), 400
         
-        # CRITICAL FIX: Add the bonus amount to balance
-        bonus_amount = DAILY_REWARD
+        # Calculate dynamic bonus based on user trustworthiness
+        base_bonus = DAILY_REWARD
+        trust_multiplier = calculate_trust_multiplier(user)
+        final_bonus = base_bonus * trust_multiplier
+        
         old_balance = user.balance_usd
-        user.balance_usd = float(user.balance_usd or 0) + bonus_amount
+        user.balance_usd = float(user.balance_usd or 0) + final_bonus
         
         # Update bonus tracking fields
         user.daily_bonus_given = True
@@ -1693,41 +1845,115 @@ def claim_daily_bonus():
         user.last_bonus_claim = datetime.utcnow()
         user.total_daily_bonuses += 1
         
-        # Update consecutive days
-        if user.last_bonus_date == today - timedelta(days=1):
-            user.consecutive_days += 1
-        else:
-            user.consecutive_days = 1  # Reset to 1 for today's claim
+        # Enhanced consecutive days calculation
+        user.consecutive_days = calculate_consecutive_days(user, today)
         
-        # Log earning
+        # Update positive behavioral indicators
+        update_positive_daily_behaviors(user, behavioral_data)
+        
+        # Log earning with enhanced tracking
         earning = Earning(
             user_id=user.id,
-            amount=bonus_amount,
+            amount=final_bonus,
             source='daily_bonus'
         )
         db.session.add(earning)
         
-        # CRITICAL FIX: Commit the transaction
+        # Update device fingerprint
+        update_device_fingerprint(user_id, device_data, user_agent)
+        
+        # Update geolocation
+        update_user_geolocation(user_id, user_ip)
+        
+        # Log legitimate daily bonus claim
+        log_security_event(user_id, 'daily_bonus_claimed', 'low',
+                         f'Legitimate daily bonus claim: ${final_bonus:.2f}',
+                         additional_data={
+                             'trust_multiplier': trust_multiplier,
+                             'verified_online_time': verified_online_time,
+                             'consecutive_days': user.consecutive_days
+                         })
+        
         db.session.commit()
         
-        # Log user IP for daily bonus claim
-        log_user_ip(session['user_id'], "daily_bonus")
-        
-        print(f"✅ Daily bonus claimed: User {user.id}, Amount: {bonus_amount}, Old Balance: {old_balance}, New Balance: {user.balance_usd}")
+        print(f"✅ Enhanced daily bonus claimed: User {user.id}, Amount: {final_bonus}, Trust: {trust_multiplier}")
         
         return jsonify({
             'success': True,
-            'bonus': bonus_amount,
+            'bonus': final_bonus,
+            'base_bonus': base_bonus,
+            'trust_multiplier': trust_multiplier,
             'old_balance': old_balance,
             'new_balance': user.balance_usd,
             'consecutive_days': user.consecutive_days,
-            'message': f'Daily bonus of ${bonus_amount:.2f} claimed successfully!'
+            'verified_online_time': verified_online_time,
+            'behavioral_score': user.behavioral_score,
+            'risk_level': user.risk_level,
+            'message': f'Daily bonus of ${final_bonus:.2f} claimed successfully!'
         })
         
     except Exception as e:
-        print(f"❌ Daily bonus error: {str(e)}")
+        print(f"❌ Enhanced daily bonus error: {str(e)}")
         db.session.rollback()
         return jsonify({'error': f'Failed to claim bonus: {str(e)}'}), 500
+
+# Helper functions for enhanced anti-cheat
+
+def update_device_fingerprint(user_id, screen_data, user_agent):
+    """Update or create device fingerprint"""
+    fingerprint_hash = generate_fingerprint_hash(screen_data, user_agent)
+    
+    fingerprint = DeviceFingerprint.query.filter_by(
+        user_id=user_id, 
+        fingerprint_hash=fingerprint_hash
+    ).first()
+    
+    if fingerprint:
+        fingerprint.last_seen = datetime.utcnow()
+        fingerprint.times_seen += 1
+    else:
+        fingerprint = DeviceFingerprint(
+            user_id=user_id,
+            fingerprint_hash=fingerprint_hash,
+            screen_resolution=screen_data.get('resolution'),
+            timezone=screen_data.get('timezone'),
+            language=screen_data.get('language'),
+            user_agent=user_agent
+        )
+        db.session.add(fingerprint)
+
+def log_security_event(user_id, event_type, severity, description, additional_data=None):
+    """Log security events for audit trail"""
+    event = SecurityEvent(
+        user_id=user_id,
+        event_type=event_type,
+        severity=severity,
+        description=description,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent', ''),
+        additional_data=additional_data
+    )
+    db.session.add(event)
+
+def calculate_ml_fraud_probability(watch_session, user_id):
+    """Calculate ML-based fraud probability"""
+    # This would integrate with your ML model
+    # For now, return a simple heuristic-based score
+    features = extract_ml_features(watch_session, user_id)
+    return simple_fraud_heuristic(features)
+
+def check_progressive_ban(user):
+    """Progressive banning system based on violations"""
+    violations = user.cheat_violations
+    
+    if violations >= 10:
+        return {'should_ban': True, 'reason': 'Excessive fraud attempts (10+)'}
+    elif violations >= 5 and user.risk_level == 'critical':
+        return {'should_ban': True, 'reason': 'Critical risk with multiple violations'}
+    elif user.ml_fraud_probability > 0.9:
+        return {'should_ban': True, 'reason': 'ML model high fraud probability'}
+    
+    return {'should_ban': False, 'reason': None}
 
 # Add these routes to your existing app.py file
 
