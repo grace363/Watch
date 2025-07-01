@@ -232,6 +232,7 @@ class User(db.Model):
     last_bonus_claim = db.column(db.DateTime) #when bonus was last claimed
     last_activity_date = db.column(db.date, default=datetime.utcnow().date)
     current_session_start = db.column(db.Date)
+    total_daily_bonuses = db.column(db.integer, default=0)
 
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
