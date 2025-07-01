@@ -708,12 +708,12 @@
             }
         }
 
-        // Function to claim daily bonus - NOW PROPERLY CONNECTED TO BACKEND
+        // FIXED: Function to claim daily bonus - Uses correct endpoint
         function claimDailyBonus() {
             const claimBtn = document.getElementById('claimBonusBtn');
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             
-            if (claimBtn.disabled) {
+            if (claimBtn.disabled && currentOnlineTime < requiredTime) {
                 alert('You need to stay online for the required time first!');
                 return;
             }
@@ -722,8 +722,8 @@
             claimBtn.disabled = true;
             claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
             
-            // Make AJAX request to daily-bonus endpoint
-            fetch('/daily-bonus', {
+            // FIXED: Use the correct endpoint that properly handles daily bonus logic
+            fetch('/api/claim_daily_bonus', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -733,17 +733,36 @@
             })
             .then(response => response.json())
             .then(data => {
-                if (data.message === 'Daily bonus granted') {
-                    // Success - reload page to update balance and hide bonus section
-                    alert('Daily bonus claimed successfully! $' + ({{ DAILY_REWARD or 0.05 }}).toFixed(2) + ' added to your account.');
-                    window.location.reload();
-                } else if (data.message === 'Already claimed today') {
-                    alert('You have already claimed your daily bonus today. Come back tomorrow!');
-                    window.location.reload();
+                if (data.success) {
+                    // Success - show new balance and reload page
+                    alert(`Daily bonus of $${data.bonus.toFixed(2)} claimed successfully! New balance: $${data.new_balance.toFixed(2)}`);
+                    
+                    // Update balance displays immediately
+                    document.querySelector('.balance-display').textContent = '$' + data.new_balance.toFixed(2);
+                    document.querySelector('.balance-amount').textContent = '$' + data.new_balance.toFixed(2);
+                    
+                    // Remove bonus section after successful claim
+                    document.querySelector('.bonus-section').style.display = 'none';
+                    
+                    // Optional: Reload page to reflect all changes
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    
                 } else if (data.error) {
-                    alert('Error: ' + data.error);
-                    claimBtn.disabled = false;
-                    claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                    // Handle specific error cases
+                    if (data.error.includes('already claimed')) {
+                        alert('You have already claimed your daily bonus today. Come back tomorrow!');
+                        window.location.reload();
+                    } else if (data.error.includes('Need to stay online')) {
+                        alert(`Please stay online longer. Required: ${data.required}s, Current: ${data.current}s`);
+                        claimBtn.disabled = false;
+                        claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                    } else {
+                        alert('Error: ' + data.error);
+                        claimBtn.disabled = false;
+                        claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                    }
                 }
             })
             .catch(error => {
