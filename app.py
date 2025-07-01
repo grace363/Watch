@@ -792,18 +792,28 @@ def home():
         return render_template('maintenance.html') if os.path.exists('templates/maintenance.html') else "Site is under maintenance. Please check back later."
     return render_template('home.html')
 
-@app.route('/register', methods=['GET', 'POST']) 
+   @app.route('/register', methods=['GET', 'POST']) 
 def register(): 
     if request.method == 'POST': 
         try:
+            # Get form data with proper handling
             email = request.form.get('email', '').strip().lower()
             password = request.form.get('password', '')
             confirm = request.form.get('confirm_password', '')
             role = request.form.get('account_type', '')
+            username = request.form.get('username', '').strip()
+            
+            # Auto-generate username from email if not provided
+            if not username:
+                username = email.split('@')[0] if email else None
 
             # Validation
             if not all([email, password, role]):
                 return jsonify({'error': 'All fields are required'}), 400
+            
+            # Validate username
+            if not username or not username.strip():
+                return jsonify({'error': 'Username is required'}), 400
 
             if PASSWORD_CONFIRMATION_REQUIRED and password != confirm:
                 return jsonify({'error': 'Passwords do not match'}), 400
@@ -814,12 +824,18 @@ def register():
             if role not in ALLOWED_ROLES:
                 return jsonify({'error': 'Invalid account type'}), 400
 
+            # Check for existing email
             if User.query.filter_by(email=email).first():
                 return jsonify({'error': 'Email already exists'}), 409
+            
+            # Check for existing username
+            if User.query.filter_by(username=username).first():
+                return jsonify({'error': 'Username already exists'}), 409
 
-            # Create user
+            # Create user with username
             hashed = generate_password_hash(password)
             user = User(
+                username=username,  # Add username field
                 email=email, 
                 password_hash=hashed, 
                 account_type=role,
@@ -903,13 +919,17 @@ def youtuber_registration_success():
 def login():
     if request.method == 'POST':
         try:
-            email = request.form.get('email', '').strip().lower()
+            # Get login credentials - support both email and username
+            email_or_username = request.form.get('email', '').strip().lower()
             password = request.form.get('password', '')
             
-            if not email or not password:
-                return jsonify({'error': 'Email and password are required'}), 400
+            if not email_or_username or not password:
+                return jsonify({'error': 'Email/Username and password are required'}), 400
             
-            user = User.query.filter_by(email=email).first()
+            # Try to find user by email first, then by username
+            user = User.query.filter_by(email=email_or_username).first()
+            if not user:
+                user = User.query.filter_by(username=email_or_username).first()
             
             if user and user.is_banned:
                 return jsonify({'error': f'Account banned: {user.ban_reason}'}), 403
@@ -949,7 +969,7 @@ def login():
                     'redirect': url_for(dashboard_route)
                 })
             else:
-                return jsonify({'error': 'Invalid email or password'}), 401
+                return jsonify({'error': 'Invalid email/username or password'}), 401
                 
         except Exception as e:
             print(f"❌ Login error: {str(e)}")
@@ -979,7 +999,7 @@ def confirm_email(token):
         print(f"❌ Email confirmation error: {str(e)}")
         flash('❌ Email verification failed.', 'error')
     
-    return redirect(url_for('login'))
+    return redirect(url_for('login'))           
 
 @app.route('/logout')
 def logout():
