@@ -1218,6 +1218,9 @@ def claim_daily_bonus():
         db.session.add(earning)
         db.session.commit()
         
+        # Log user IP for daily bonus claim (missing part added)
+        log_user_ip(session['user_id'], "daily_bonus")
+        
         return jsonify({
             'success': True,
             'bonus': DAILY_REWARD,
