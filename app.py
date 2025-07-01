@@ -19,7 +19,8 @@ from pathlib import Path
 from flask import session, jsonify, request 
 import logging 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text
-from sqlalchemy import Date
+from sqlalchemy import Date, DateTime
+from datetime import datetime
 
 #==== Flask App Config ====
 
@@ -236,11 +237,11 @@ class User(db.Model):
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
     session_start_time = db.Column(db.DateTime)
     last_heartbeat = db.Column(db.DateTime)
-    last_bonus_claim = db.Column(db.DateTime) #when bonus was last claimed
-    last_activity_date = db.Column(db.date, default=datetime.utcnow().date)
-    current_session_start = db.Column(db.Date)
-    total_daily_bonuses = db.Column(db.Integer, default=0)
-
+    last_bonus_claim = db.Column(DateTime)  # When bonus was last claimed
+    last_activity_date = db.Column(Date, default=datetime.utcnow().date())  # Use Date (not db.date)
+    current_session_start = db.Column(Date)
+    total_daily_bonuses = db.Column(db.Integer, default=0)  # You had an incomplete line here
+    
      #session tracking 
     current_session_start = db.Column(DateTime)
     session_token = db.Column(String(64))
