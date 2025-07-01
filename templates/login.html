@@ -104,6 +104,12 @@
       color: #0056b3;
       background: none;
     }
+    .input-hint {
+      font-size: 0.9em;
+      color: #666;
+      margin-top: -5px;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
@@ -118,8 +124,9 @@
     <form id="login-form" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-      <label for="email">Email:</label>
-      <input type="email" name="email" id="email" required>
+      <label for="email">Email or Username:</label>
+      <input type="text" name="email" id="email" required placeholder="Enter your email or username">
+      <div class="input-hint">You can use either your email address or username to login</div>
 
       <label for="password">Password:</label>
       <div class="password-container">
