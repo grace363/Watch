@@ -372,8 +372,8 @@ def reset_daily_data_if_needed(user):
     """Reset daily data if it's a new day"""
     today = datetime.utcnow().date()
     
-    # Check if it's a new day
-    if user.last_activity_date != today:
+    # Check if it's a new day compared to last activity
+    if not user.last_activity_date or user.last_activity_date != today:
         logging.info(f"Resetting daily data for user {user.id} - New day detected")
         
         # Reset daily counters
@@ -382,12 +382,18 @@ def reset_daily_data_if_needed(user):
         user.videos_watched_today = 0
         user.last_activity_date = today
         user.current_session_start = datetime.utcnow()
+        user.session_start_time = datetime.utcnow()  # Reset session tracking
+        user.last_heartbeat = datetime.utcnow()
         
-        # Update consecutive days if bonus was claimed yesterday
-        if user.last_bonus_date == today - timedelta(days=1):
-            user.consecutive_days += 1
-        elif user.last_bonus_date != today:
-            user.consecutive_days = 0
+        # Handle consecutive days logic
+        if user.last_bonus_date:
+            # If user claimed bonus yesterday, they maintain streak
+            if user.last_bonus_date == today - timedelta(days=1):
+                # Consecutive days maintained
+                pass
+            else:
+                # Streak broken - reset consecutive days
+                user.consecutive_days = 0
         
         # Commit the reset
         try:
@@ -396,8 +402,28 @@ def reset_daily_data_if_needed(user):
         except Exception as e:
             logging.error(f"Failed to reset daily data for user {user.id}: {str(e)}")
             db.session.rollback()
+            raise e
     
     return user
+
+# Additional helper function to check daily bonus eligibility
+def can_claim_daily_bonus(user):
+    """Check if user can claim daily bonus"""
+    today = datetime.utcnow().date()
+    
+    # Check if already claimed today
+    if user.daily_bonus_given and user.last_bonus_date == today:
+        return False, "Already claimed today"
+    
+    # Check online time requirement
+    if user.daily_online_time < DAILY_ONLINE_TIME:
+        return False, f"Need {DAILY_ONLINE_TIME - user.daily_online_time} more seconds online"
+    
+    # Check if user is banned
+    if user.is_banned:
+        return False, "Account is banned"
+    
+    return True, "Eligible for bonus"
 
 def create_session_token():
     """Create a unique session token"""
@@ -1509,9 +1535,17 @@ def claim_daily_bonus():
         if not user or user.is_banned:
             return jsonify({'error': 'Account unavailable'}), 403
         
-        if user.daily_bonus_given:
-            return jsonify({'error': 'Daily bonus already claimed'}), 400
+        # CRITICAL FIX: Reset daily data if it's a new day
+        user = reset_daily_data_if_needed(user)
         
+        # Get today's date for comparison
+        today = datetime.utcnow().date()
+        
+        # Check if bonus was already claimed today
+        if user.daily_bonus_given and user.last_bonus_date == today:
+            return jsonify({'error': 'Daily bonus already claimed today'}), 400
+        
+        # Check if user has enough online time
         if user.daily_online_time < DAILY_ONLINE_TIME:
             return jsonify({
                 'error': f'Need to stay online for {DAILY_ONLINE_TIME} seconds. You have {user.daily_online_time} seconds.',
@@ -1519,32 +1553,52 @@ def claim_daily_bonus():
                 'current': user.daily_online_time
             }), 400
         
-        # Give daily bonus
-        user.balance_usd += DAILY_REWARD
+        # CRITICAL FIX: Add the bonus amount to balance
+        bonus_amount = DAILY_REWARD
+        old_balance = user.balance_usd
+        user.balance_usd = float(user.balance_usd or 0) + bonus_amount
+        
+        # Update bonus tracking fields
         user.daily_bonus_given = True
+        user.last_bonus_date = today
+        user.last_bonus_claim = datetime.utcnow()
+        user.total_daily_bonuses += 1
+        
+        # Update consecutive days
+        if user.last_bonus_date == today - timedelta(days=1):
+            user.consecutive_days += 1
+        else:
+            user.consecutive_days = 1  # Reset to 1 for today's claim
         
         # Log earning
         earning = Earning(
             user_id=user.id,
-            amount=DAILY_REWARD,
+            amount=bonus_amount,
             source='daily_bonus'
         )
         db.session.add(earning)
+        
+        # CRITICAL FIX: Commit the transaction
         db.session.commit()
         
-        # Log user IP for daily bonus claim (missing part added)
+        # Log user IP for daily bonus claim
         log_user_ip(session['user_id'], "daily_bonus")
+        
+        print(f"✅ Daily bonus claimed: User {user.id}, Amount: {bonus_amount}, Old Balance: {old_balance}, New Balance: {user.balance_usd}")
         
         return jsonify({
             'success': True,
-            'bonus': DAILY_REWARD,
-            'new_balance': user.balance_usd
+            'bonus': bonus_amount,
+            'old_balance': old_balance,
+            'new_balance': user.balance_usd,
+            'consecutive_days': user.consecutive_days,
+            'message': f'Daily bonus of ${bonus_amount:.2f} claimed successfully!'
         })
         
     except Exception as e:
         print(f"❌ Daily bonus error: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to claim bonus'}), 500
+        return jsonify({'error': f'Failed to claim bonus: {str(e)}'}), 500
 
 # Add these routes to your existing app.py file
 
