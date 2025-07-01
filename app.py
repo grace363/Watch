@@ -298,6 +298,7 @@ class DailySession(db.Model):
     focus_lost_count = db.Column(db.Integer, default=0)
     daily_reward_given = db.Column(db.Boolean, default=False)
     is_valid = db.Column(db.Boolean, default=True)
+    ip_address = db.column(db.string(45))
     
     user = db.relationship('User', backref=db.backref('daily_sessions', lazy=True))
 
