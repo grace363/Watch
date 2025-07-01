@@ -209,7 +209,7 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 
 class User(db.Model): 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.column(string(80), unique=True, nullable=False)
+    username = db.Column(String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False) 
     password_hash = db.Column(db.String(200), nullable=False) 
     account_type = db.Column(db.String(10), nullable=False) 
@@ -223,8 +223,8 @@ class User(db.Model):
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))
-    last_bonus_date = db.column(db.Date)
-    daily_online_time = db.column(Integer, default=0)
+    last_bonus_date = db.Column(db.Date)
+    daily_online_time = db.Column(Integer, default=0)
         
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
@@ -235,14 +235,14 @@ class User(db.Model):
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
     session_start_time = db.Column(db.DateTime)
     last_heartbeat = db.Column(db.DateTime)
-    last_bonus_claim = db.column(db.DateTime) #when bonus was last claimed
-    last_activity_date = db.column(db.date, default=datetime.utcnow().date)
-    current_session_start = db.column(db.Date)
-    total_daily_bonuses = db.column(db.Integer, default=0)
+    last_bonus_claim = db.Column(db.DateTime) #when bonus was last claimed
+    last_activity_date = db.Column(db.date, default=datetime.utcnow().date)
+    current_session_start = db.Column(db.Date)
+    total_daily_bonuses = db.Column(db.Integer, default=0)
 
      #session tracking 
-    current_session_start = db.column(DateTime)
-    session_token = db.column(String(64))
+    current_session_start = db.Column(DateTime)
+    session_token = db.Column(String(64))
 
      #consecutive days and bonuses
     consecutive_days = Column(Integer, default=0)
@@ -336,7 +336,7 @@ class DailySession(db.Model):
     focus_lost_count = db.Column(db.Integer, default=0)
     daily_reward_given = db.Column(db.Boolean, default=False)
     is_valid = db.Column(db.Boolean, default=True)
-    ip_address = db.column(db.string(45))
+    ip_address = db.Column(db.String(45))
     
     user = db.relationship('User', backref=db.backref('daily_sessions', lazy=True))
 
