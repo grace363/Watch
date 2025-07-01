@@ -60,6 +60,52 @@
             outline: none;
             border-color: #667eea;
         }
+        .password-container {
+            position: relative;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            font-size: 14px;
+            padding: 0;
+            outline: none;
+        }
+        .password-toggle:hover {
+            color: #667eea;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            margin-top: 2px;
+            min-width: 16px;
+            min-height: 16px;
+        }
+        .checkbox-group label {
+            margin: 0;
+            font-weight: normal;
+            font-size: 14px;
+            line-height: 1.4;
+            color: #555;
+        }
+        .checkbox-group a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .checkbox-group a:hover {
+            text-decoration: underline;
+        }
         .register-btn {
             width: 100%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -115,6 +161,11 @@
             margin-top: 10px;
             color: #667eea;
         }
+        .optional-label {
+            color: #888;
+            font-size: 0.9em;
+            font-weight: normal;
+        }
     </style>
 </head>
 <body>
@@ -135,13 +186,28 @@
             </div>
 
             <div class="form-group">
+                <label for="name">Name <span class="optional-label">(optional)</span></label>
+                <input type="text" id="name" name="name" placeholder="Enter your name (optional)">
+            </div>
+
+            <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required minlength="6">
+                <div class="password-container">
+                    <input type="password" id="password" name="password" required minlength="6">
+                    <button type="button" class="password-toggle" onclick="togglePassword('password')">
+                        👁️
+                    </button>
+                </div>
             </div>
 
             <div class="form-group">
                 <label for="confirm_password">Confirm Password</label>
-                <input type="password" id="confirm_password" name="confirm_password" required>
+                <div class="password-container">
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                    <button type="button" class="password-toggle" onclick="togglePassword('confirm_password')">
+                        👁️
+                    </button>
+                </div>
             </div>
 
             <div class="form-group">
@@ -151,6 +217,13 @@
                     <option value="User">User (Watch Videos & Earn)</option>
                     <option value="YouTuber">YouTuber (Upload Videos)</option>
                 </select>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="agree_terms" name="agree_terms" required>
+                <label for="agree_terms">
+                    I agree to the <a href="terms.html" target="_blank">Terms and Conditions</a>
+                </label>
             </div>
 
             <button type="submit" class="register-btn" id="registerBtn">
@@ -168,6 +241,19 @@
     </div>
 
     <script>
+        function togglePassword(fieldId) {
+            const field = document.getElementById(fieldId);
+            const button = field.nextElementSibling;
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.textContent = '🙈';
+            } else {
+                field.type = 'password';
+                button.textContent = '👁️';
+            }
+        }
+
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
