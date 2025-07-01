@@ -207,7 +207,8 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 #==== DB Models ====
 
 class User(db.Model): 
-    id = db.Column(db.Integer, primary_key=True) 
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.column(string(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False) 
     password_hash = db.Column(db.String(200), nullable=False) 
     account_type = db.Column(db.String(10), nullable=False) 
@@ -222,7 +223,8 @@ class User(db.Model):
     last_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))
     last_bonus_date = db.column(db.Date)
-    
+    daily_online_time = db.column(Integer, default=0)
+        
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
     last_video_date = db.Column(db.Date)
@@ -235,7 +237,25 @@ class User(db.Model):
     last_bonus_claim = db.column(db.DateTime) #when bonus was last claimed
     last_activity_date = db.column(db.date, default=datetime.utcnow().date)
     current_session_start = db.column(db.Date)
-    total_daily_bonuses = db.column(db.integer, default=0)
+    total_daily_bonuses = db.column(db.Integer, default=0)
+
+     #session tracking 
+    current_session_start = db.column(DateTime)
+    session_token = db.column(String(64))
+
+     #consecutive days and bonuses
+    consecutive_days = Column(Integer, default=0)
+
+        # Ban and cheat detection
+    is_banned = Column(Boolean, default=False)
+    ban_reason = Column(Text)
+    cheat_violations = Column(Integer, default=0)
+
+    # Additional tracking fields
+    total_watch_time = Column(Integer, default=0)
+    last_ip_address = Column(String(45))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
@@ -273,6 +293,7 @@ class Video(db.Model):
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
 
 class WatchSession(db.Model):
+    __tablename__ = 'watch_sessions'
     """Track individual video watch sessions for anti-cheat"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -288,6 +309,10 @@ class WatchSession(db.Model):
     cheat_reason = db.Column(db.String(200))
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.Text)
+    video_length = Column(Integer)  # total video length in seconds
+    is_completed = Column(Boolean, default=False)
+    is_suspicious = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
     video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
