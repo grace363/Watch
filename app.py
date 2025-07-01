@@ -226,7 +226,7 @@ class User(db.Model):
     last_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))
     last_bonus_date = db.Column(db.Date)
-    daily_online_time = db.Column(Integer, default=0)
+    daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
         
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
@@ -234,37 +234,50 @@ class User(db.Model):
     cheat_violations = db.Column(db.Integer, default=0)
     is_banned = db.Column(db.Boolean, default=False)
     ban_reason = db.Column(db.String(200))
-    daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
     session_start_time = db.Column(db.DateTime)
     last_heartbeat = db.Column(db.DateTime)
-    last_bonus_claim = db.Column(DateTime)  # When bonus was last claimed
-    last_activity_date = db.Column(Date, default=datetime.utcnow().date())  # Use Date (not db.date)
-    current_session_start = db.Column(Date)
-    total_daily_bonuses = db.Column(db.Integer, default=0)  # You had an incomplete line here
+    last_bonus_claim = db.Column(db.DateTime)  # When bonus was last claimed
+    last_activity_date = db.Column(db.Date, default=datetime.utcnow().date())  # Use Date (not db.date)
+    current_session_start = db.Column(db.DateTime)
+    total_daily_bonuses = db.Column(db.Integer, default=0)
     
-     #session tracking 
-    current_session_start = db.Column(DateTime)
-    session_token = db.Column(String(64))
+    # Session tracking 
+    session_token = db.Column(db.String(64))
 
-     #consecutive days and bonuses
-    consecutive_days = Column(Integer, default=0)
+    # Consecutive days and bonuses
+    consecutive_days = db.Column(db.Integer, default=0)
 
-        # Ban and cheat detection
-    is_banned = Column(Boolean, default=False)
-    ban_reason = Column(Text)
-    cheat_violations = Column(Integer, default=0)
-
-      # Anti-cheat specific fields
-    back_button_pressed = Column(Boolean, default=False)
-    focus_lost_count = Column(Integer, default=0)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # Anti-cheat specific fields
+    back_button_pressed = db.Column(db.Boolean, default=False)
+    focus_lost_count = db.Column(db.Integer, default=0)
     
     # Additional tracking fields
-    total_watch_time = Column(Integer, default=0)
-    last_ip_address = Column(String(45))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    total_watch_time = db.Column(db.Integer, default=0)
+    last_ip_address = db.Column(db.String(45))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Advanced Anti-Cheat Fields
+    device_fingerprint = db.Column(db.String(200))  # Browser/device fingerprint
+    time_zone = db.Column(db.String(50))  # User's timezone
+    screen_resolution = db.Column(db.String(20))  # Screen dimensions
+    user_agent_hash = db.Column(db.String(64))  # Hashed user agent
+    click_pattern_score = db.Column(db.Float, default=0.0)  # ML-based click pattern analysis
+    watch_velocity_score = db.Column(db.Float, default=0.0)  # Video consumption velocity
+    behavioral_score = db.Column(db.Float, default=0.0)  # Overall behavioral analysis score
+    proxy_detected = db.Column(db.Boolean, default=False)  # VPN/Proxy detection
+    automation_detected = db.Column(db.Boolean, default=False)  # Bot/automation detection
+    suspicious_activity_count = db.Column(db.Integer, default=0)  # Count of suspicious events
+    risk_level = db.Column(db.String(10), default='low')  # low, medium, high, critical
+    last_risk_assessment = db.Column(db.DateTime)  # When risk was last calculated
+    
+    # Device/Browser Consistency Tracking
+    browser_changes_count = db.Column(db.Integer, default=0)  # How often browser changes
+    device_changes_count = db.Column(db.Integer, default=0)  # How often device changes
+    location_changes_count = db.Column(db.Integer, default=0)  # Geographic changes
+    
+    # Machine Learning Features
+    ml_fraud_probability = db.Column(db.Float, default=0.0)  # ML model fraud probability
+    feature_vector_hash = db.Column(db.String(64))  # Hash of ML features for comparison
 
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
@@ -318,10 +331,10 @@ class WatchSession(db.Model):
     cheat_reason = db.Column(db.String(200))
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.Text)
-    video_length = Column(Integer)  # total video length in seconds
-    is_completed = Column(Boolean, default=False)
-    is_suspicious = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    video_length = db.Column(db.Integer)  # total video length in seconds
+    is_completed = db.Column(db.Boolean, default=False)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
     video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
@@ -366,6 +379,122 @@ class Earning(db.Model):
     user = db.relationship('User', backref=db.backref('earnings', lazy=True))
     video = db.relationship('Video', backref=db.backref('earnings', lazy=True))
 
+class DeviceFingerprint(db.Model):
+    """Track device fingerprints for fraud detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    fingerprint_hash = db.Column(db.String(200), nullable=False)
+    screen_resolution = db.Column(db.String(20))
+    timezone = db.Column(db.String(50))
+    language = db.Column(db.String(10))
+    user_agent = db.Column(db.Text)
+    canvas_fingerprint = db.Column(db.String(100))  # Canvas-based fingerprinting
+    webgl_fingerprint = db.Column(db.String(100))   # WebGL-based fingerprinting
+    audio_fingerprint = db.Column(db.String(100))   # Audio context fingerprinting
+    plugins_list = db.Column(db.Text)  # Installed browser plugins
+    fonts_list = db.Column(db.Text)    # Available fonts
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    times_seen = db.Column(db.Integer, default=1)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    
+    user = db.relationship('User', backref=db.backref('device_fingerprints', lazy=True))
+
+class SecurityEvent(db.Model):
+    """Log security events and suspicious activities"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    event_type = db.Column(db.String(50), nullable=False)  # 'proxy_detected', 'bot_detected', etc.
+    severity = db.Column(db.String(10), default='low')  # low, medium, high, critical
+    description = db.Column(db.Text)
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    session_token = db.Column(db.String(100))
+    additional_data = db.Column(db.JSON)  # Store additional context as JSON
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved = db.Column(db.Boolean, default=False)
+    admin_notes = db.Column(db.Text)
+    
+    user = db.relationship('User', backref=db.backref('security_events', lazy=True))
+
+class MouseMovement(db.Model):
+    """Track mouse movements for bot detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=False)
+    timestamp = db.Column(db.Float, nullable=False)  # Milliseconds since session start
+    x_coordinate = db.Column(db.Integer)
+    y_coordinate = db.Column(db.Integer)
+    event_type = db.Column(db.String(10))  # 'move', 'click', 'scroll'
+    velocity = db.Column(db.Float)  # Calculated velocity
+    is_human_like = db.Column(db.Boolean, default=True)
+    
+    session = db.relationship('WatchSession', backref=db.backref('mouse_movements', lazy=True))
+
+class KeystrokePattern(db.Model):
+    """Track keystroke patterns for behavioral analysis"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_token = db.Column(db.String(100))
+    key_pressed = db.Column(db.String(10))  # Which key was pressed
+    dwell_time = db.Column(db.Float)  # How long key was held
+    flight_time = db.Column(db.Float)  # Time between key releases
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    
+    user = db.relationship('User', backref=db.backref('keystroke_patterns', lazy=True))
+
+class GeoLocation(db.Model):
+    """Track user locations for anomaly detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=False)
+    country = db.Column(db.String(2))  # ISO country code
+    region = db.Column(db.String(50))
+    city = db.Column(db.String(50))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    is_proxy = db.Column(db.Boolean, default=False)
+    is_vpn = db.Column(db.Boolean, default=False)
+    is_tor = db.Column(db.Boolean, default=False)
+    isp = db.Column(db.String(100))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    distance_from_last = db.Column(db.Float)  # Distance in km from last location
+    
+    user = db.relationship('User', backref=db.backref('geo_locations', lazy=True))
+
+class RiskScore(db.Model):
+    """Store ML-based risk scores and fraud predictions"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
+    model_version = db.Column(db.String(20))  # Which ML model version was used
+    fraud_probability = db.Column(db.Float, nullable=False)  # 0.0 to 1.0
+    behavioral_score = db.Column(db.Float)
+    device_score = db.Column(db.Float)
+    location_score = db.Column(db.Float)
+    pattern_score = db.Column(db.Float)
+    velocity_score = db.Column(db.Float)
+    final_risk_level = db.Column(db.String(10))  # low, medium, high, critical
+    features_used = db.Column(db.JSON)  # Which features contributed to the score
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    action_taken = db.Column(db.String(50))  # What action was taken based on score
+    
+    user = db.relationship('User', backref=db.backref('risk_scores', lazy=True))
+    session = db.relationship('WatchSession', backref=db.backref('risk_scores', lazy=True))
+
+class HoneypotInteraction(db.Model):
+    """Track interactions with honeypot elements (invisible buttons/links)"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    session_token = db.Column(db.String(100))
+    honeypot_type = db.Column(db.String(50))  # 'invisible_button', 'hidden_link', etc.
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    automatic_ban = db.Column(db.Boolean, default=True)  # Auto-ban on honeypot interaction
+    
+    user = db.relationship('User', backref=db.backref('honeypot_interactions', lazy=True))
+    
 #==== Anti-Cheat Utility Functions ====
 
 def reset_daily_data_if_needed(user):
