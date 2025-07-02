@@ -1,553 +1,681 @@
-import os 
-import json 
-import base64 
-import secrets 
-from datetime import datetime, timedelta 
-from flask import Flask, request, session, jsonify, render_template, redirect, url_for, flash 
-from flask_sqlalchemy import SQLAlchemy 
-from flask_limiter import Limiter 
-from flask_limiter.util import get_remote_address 
-from flask_mail import Mail, Message 
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature 
-import firebase_admin 
-from firebase_admin import credentials, firestore 
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask import render_template
-
-#==== Flask App Config ====
-
-app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
-
-#==== Environment Config ====
-
-CSRF_TOKEN_LENGTH = int(os.environ.get('CSRF_TOKEN_LENGTH', 16)) 
-LOGIN_RATE_LIMIT = os.environ.get('LOGIN_RATE_LIMIT', '20 per minute') 
-DAILY_REWARD = float(os.environ.get('DAILY_LOGIN_REWARD', 0.05)) 
-MIN_WITHDRAW_AMOUNT = float(os.environ.get('MIN_WITHDRAW_AMOUNT', 150)) 
-AUTO_LOGIN_AFTER_REGISTRATION = os.environ.get('AUTO_LOGIN_AFTER_REGISTRATION', 'false').lower() == 'true' 
-ENABLE_REWARDS = os.environ.get('ENABLE_REWARDS', 'true').lower() == 'true' 
-MAINTENANCE_MODE = os.environ.get('MAINTENANCE_MODE', 'false').lower() == 'true' 
-PASSWORD_MIN_LENGTH = int(os.environ.get('PASSWORD_MIN_LENGTH', 6)) 
-PASSWORD_CONFIRMATION_REQUIRED = os.environ.get('PASSWORD_CONFIRMATION_REQUIRED', 'true').lower() == 'true' 
-ALLOWED_ROLES = os.environ.get('ALLOWED_ROLES', 'User,YouTuber').split(',')
-
-# IP Tracking Configuration
-ENABLE_IP_TRACKING = os.environ.get('ENABLE_IP_TRACKING', 'true').lower() == 'true'
-TRUST_PROXY_HEADERS = os.environ.get('TRUST_PROXY_HEADERS', 'true').lower() == 'true'
-MAX_IP_HISTORY = int(os.environ.get('MAX_IP_HISTORY', 10))  # Keep last 10 IP addresses per user
-
-#==== IP Address Tracking Utility ====
-
-def get_client_ip():
-    """Get the real client IP address, considering proxy headers if enabled"""
-    if TRUST_PROXY_HEADERS:
-        # Check common proxy headers in order of preference
-        forwarded_for = request.headers.get('X-Forwarded-For')
-        if forwarded_for:
-            # X-Forwarded-For can contain multiple IPs, take the first one
-            return forwarded_for.split(',')[0].strip()
-        
-        real_ip = request.headers.get('X-Real-IP')
-        if real_ip:
-            return real_ip.strip()
-        
-        # Cloudflare specific header
-        cf_connecting_ip = request.headers.get('CF-Connecting-IP')
-        if cf_connecting_ip:
-            return cf_connecting_ip.strip()
-    
-    # Fall back to direct connection IP
-    return request.remote_addr or 'Unknown'
-
-def log_user_ip(user_id, action="login"):
-    """Log user IP address for tracking purposes"""
-    if not ENABLE_IP_TRACKING:
-        return
-    
-    try:
-        ip_address = get_client_ip()
-        user_agent = request.headers.get('User-Agent', 'Unknown')
-        
-        # Create IP log entry
-        ip_log = IPLog(
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            action=action,
-            timestamp=datetime.utcnow()
-        )
-        
-        db.session.add(ip_log)
-        
-        # Clean up old IP logs to prevent database bloat
-        cleanup_old_ip_logs(user_id)
-        
-        db.session.commit()
-        
-    except Exception as e:
-        print(f"❌ Failed to log IP for user {user_id}: {str(e)}")
-        db.session.rollback()
-
-def cleanup_old_ip_logs(user_id):
-    """Keep only the most recent IP logs for a user"""
-    try:
-        # Get count of logs for this user
-        log_count = IPLog.query.filter_by(user_id=user_id).count()
-        
-        if log_count > MAX_IP_HISTORY:
-            # Get oldest logs to delete
-            logs_to_delete = IPLog.query.filter_by(user_id=user_id)\
-                .order_by(IPLog.timestamp.asc())\
-                .limit(log_count - MAX_IP_HISTORY)\
-                .all()
-            
-            for log in logs_to_delete:
-                db.session.delete(log)
-                
-    except Exception as e:
-        print(f"❌ Failed to cleanup IP logs for user {user_id}: {str(e)}")
-
-#==== CSRF Token Setup ====
-
-@app.before_request 
-def csrf_protect(): 
-    if request.method == "POST": 
-        csrf_token = session.get('_csrf_token') 
-        if not csrf_token or csrf_token != request.form.get('csrf_token'): 
-            return "CSRF token missing or incorrect", 400
-
-def generate_csrf_token(): 
-    if '_csrf_token' not in session: 
-        session['_csrf_token'] = secrets.token_hex(CSRF_TOKEN_LENGTH) 
-    return session['_csrf_token']
-
-app.jinja_env.globals['csrf_token'] = generate_csrf_token
-
-#==== Email Config ====
-
-app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER') 
-app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587)) 
-app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True') == 'True' 
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME') 
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD') 
-mail = Mail(app)
-
-#==== Rate Limiting ====
-
-limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[LOGIN_RATE_LIMIT])
-
-#==== Firebase Setup ====
-
-firebase_base64 = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY") 
-if firebase_base64:
-    firebase_dict = json.loads(base64.b64decode(firebase_base64).decode('utf-8')) 
-    cred = credentials.Certificate(firebase_dict) 
-    firebase_admin.initialize_app(cred) 
-    db_firestore = firestore.client()
-
-#==== SQLAlchemy Setup ====
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///watch_and_earn.db' 
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
-db = SQLAlchemy(app)
-
-#==== Serializer for Email Tokens ====
-
-serializer = URLSafeTimedSerializer(app.secret_key)
-
-#==== DB Models ====
-
-from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, timedelta
-from sqlalchemy import String, Text, JSON, Index
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from django.core.exceptions import ValidationError
+from decimal import Decimal
+import uuid
 import json
 
-db = SQLAlchemy()
 
-class User(db.Model): 
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False) 
-    password_hash = db.Column(db.String(200), nullable=False) 
-    account_type = db.Column(db.String(10), nullable=False) 
-    is_verified = db.Column(db.Boolean, default=False) 
-    last_login_date = db.Column(db.DateTime) 
-    total_watch_minutes = db.Column(db.Integer, default=0) 
-    daily_bonus_given = db.Column(db.Boolean, default=False) 
-    balance_usd = db.Column(db.Float, default=0.0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_ip = db.Column(db.String(45))
-    first_name = db.Column(db.String(50))
-    last_name = db.Column(db.String(50))
-    phone = db.Column(db.String(20))
-    last_bonus_date = db.Column(db.Date)
-    daily_online_time = db.Column(db.Integer, default=0)
-        
-    # Enhanced Anti-cheat fields
-    videos_watched_today = db.Column(db.Integer, default=0)
-    last_video_date = db.Column(db.Date)
-    cheat_violations = db.Column(db.Integer, default=0)
-    is_banned = db.Column(db.Boolean, default=False)
-    ban_reason = db.Column(db.String(200))
-    ban_expires_at = db.Column(db.DateTime)  # Temporary bans
-    session_start_time = db.Column(db.DateTime)
-    last_heartbeat = db.Column(db.DateTime)
-    last_bonus_claim = db.Column(db.DateTime)
-    last_activity_date = db.Column(db.Date, default=datetime.utcnow().date())
-    current_session_start = db.Column(db.DateTime)
-    total_daily_bonuses = db.Column(db.Integer, default=0)
-    consecutive_days = db.Column(db.Integer, default=0)
+class User(AbstractUser):
+    """Enhanced user model for watch and earn app with anti-cheat measures"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     
-    # Advanced Session tracking 
-    session_token = db.Column(db.String(64))
-    active_sessions_count = db.Column(db.Integer, default=0)  # Prevent multiple sessions
-    max_concurrent_sessions = db.Column(db.Integer, default=1)
+    # Basic Info
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    first_name = models.CharField(max_length=50, blank=True)
+    last_name = models.CharField(max_length=50, blank=True)
     
-    # Behavioral Anti-cheat
-    back_button_pressed = db.Column(db.Boolean, default=False)
-    focus_lost_count = db.Column(db.Integer, default=0)
-    tab_switch_count = db.Column(db.Integer, default=0)  # Track tab switching
-    window_blur_count = db.Column(db.Integer, default=0)  # Track window focus loss
-    fast_forward_attempts = db.Column(db.Integer, default=0)  # Video manipulation attempts
+    # Financial Fields
+    total_earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    available_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    pending_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    lifetime_earnings = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     
-    # Watch Pattern Analysis
-    total_watch_time = db.Column(db.Integer, default=0)
-    average_watch_completion = db.Column(db.Float, default=0.0)  # % of videos completed
-    watch_streak = db.Column(db.Integer, default=0)  # Consecutive videos watched
-    unusual_watch_patterns = db.Column(db.Integer, default=0)  # Flagged patterns
+    # Referral System
+    referral_code = models.CharField(max_length=10, unique=True, blank=True)
+    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
+    referral_earnings = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    total_referrals = models.PositiveIntegerField(default=0)
     
-    # Device/Browser Fingerprinting
-    device_fingerprint = db.Column(db.String(200))
-    browser_fingerprint = db.Column(db.String(200))  # Separate browser fingerprint
-    time_zone = db.Column(db.String(50))
-    screen_resolution = db.Column(db.String(20))
-    user_agent_hash = db.Column(db.String(64))
-    canvas_fingerprint = db.Column(db.String(100))
-    webgl_fingerprint = db.Column(db.String(100))
-    audio_fingerprint = db.Column(db.String(100))
+    # Activity Tracking
+    is_verified = models.BooleanField(default=False)
+    is_active_today = models.BooleanField(default=False)
+    last_activity = models.DateTimeField(auto_now=True)
+    last_login_date = models.DateTimeField(null=True, blank=True)
+    session_start_time = models.DateTimeField(null=True, blank=True)
+    current_session_start = models.DateTimeField(null=True, blank=True)
+    last_heartbeat = models.DateTimeField(null=True, blank=True)
     
-    # AI/ML Fraud Detection
-    click_pattern_score = db.Column(db.Float, default=0.0)
-    watch_velocity_score = db.Column(db.Float, default=0.0)
-    behavioral_score = db.Column(db.Float, default=0.0)
-    ml_fraud_probability = db.Column(db.Float, default=0.0)
-    feature_vector_hash = db.Column(db.String(64))
+    # Daily Stats
+    videos_watched_today = models.PositiveIntegerField(default=0)
+    daily_online_time = models.PositiveIntegerField(default=0, help_text="Seconds online today")
+    last_video_date = models.DateField(null=True, blank=True)
+    last_activity_date = models.DateField(default=timezone.now)
+    last_bonus_date = models.DateField(null=True, blank=True)
+    last_bonus_claim = models.DateTimeField(null=True, blank=True)
+    consecutive_days = models.PositiveIntegerField(default=0)
+    total_daily_bonuses = models.PositiveIntegerField(default=0)
     
-    # Network/Proxy Detection
-    proxy_detected = db.Column(db.Boolean, default=False)
-    vpn_detected = db.Column(db.Boolean, default=False)
-    tor_detected = db.Column(db.Boolean, default=False)
-    datacenter_ip = db.Column(db.Boolean, default=False)
+    # Anti-Cheat System
+    cheat_violations = models.PositiveIntegerField(default=0)
+    is_banned = models.BooleanField(default=False)
+    ban_reason = models.TextField(blank=True)
+    ban_expires_at = models.DateTimeField(null=True, blank=True)
+    trust_score = models.DecimalField(max_digits=5, decimal_places=2, default=100.00)
     
-    # Automation Detection
-    automation_detected = db.Column(db.Boolean, default=False)
-    bot_score = db.Column(db.Float, default=0.0)  # 0.0 = human, 1.0 = bot
-    headless_browser_detected = db.Column(db.Boolean, default=False)
-    selenium_detected = db.Column(db.Boolean, default=False)
-    puppeteer_detected = db.Column(db.Boolean, default=False)
+    # Session Management
+    session_token = models.CharField(max_length=64, blank=True)
+    active_sessions_count = models.PositiveIntegerField(default=0)
+    max_concurrent_sessions = models.PositiveIntegerField(default=1)
     
-    # Risk Assessment
-    suspicious_activity_count = db.Column(db.Integer, default=0)
-    risk_level = db.Column(db.String(10), default='low')  # low, medium, high, critical
-    trust_score = db.Column(db.Float, default=100.0)  # 0-100, higher = more trusted
-    last_risk_assessment = db.Column(db.DateTime)
-    
-    # Consistency Tracking
-    browser_changes_count = db.Column(db.Integer, default=0)
-    device_changes_count = db.Column(db.Integer, default=0)
-    location_changes_count = db.Column(db.Integer, default=0)
-    ip_changes_count = db.Column(db.Integer, default=0)
-    timezone_changes_count = db.Column(db.Integer, default=0)
-    
-    # Speed/Timing Analysis
-    average_reaction_time = db.Column(db.Float, default=0.0)  # Click reaction times
-    typing_speed_wpm = db.Column(db.Integer, default=0)  # Words per minute
-    mouse_movement_entropy = db.Column(db.Float, default=0.0)  # Randomness of mouse movements
-    
-    # Earning Protection
-    daily_earning_limit = db.Column(db.Float, default=5.0)  # Max daily earnings
-    current_daily_earnings = db.Column(db.Float, default=0.0)
-    last_earnings_reset = db.Column(db.Date, default=datetime.utcnow().date())
-    weekly_earning_limit = db.Column(db.Float, default=25.0)
-    current_weekly_earnings = db.Column(db.Float, default=0.0)
-    
-    # Account Flags
-    manual_review_required = db.Column(db.Boolean, default=False)
-    kyc_required = db.Column(db.Boolean, default=False)
-    withdrawal_restricted = db.Column(db.Boolean, default=False)
-    earning_restricted = db.Column(db.Boolean, default=False)
-    
-    def __repr__(self):
-        return f'<User {self.username}>'
-
-
-class AntiCheatRule(db.Model):
-    """Define anti-cheat rules and thresholds"""
-    id = db.Column(db.Integer, primary_key=True)
-    rule_name = db.Column(db.String(100), unique=True, nullable=False)
-    rule_type = db.Column(db.String(50), nullable=False)  # 'behavioral', 'technical', 'pattern'
-    description = db.Column(db.Text)
-    is_active = db.Column(db.Boolean, default=True)
-    severity = db.Column(db.String(20), default='medium')  # low, medium, high, critical
-    threshold_value = db.Column(db.Float)  # Numeric threshold
-    threshold_timeframe = db.Column(db.Integer)  # Minutes/hours for time-based rules
-    action_type = db.Column(db.String(20), default='flag')  # flag, warn, restrict, ban
-    auto_action = db.Column(db.Boolean, default=False)  # Auto-execute action
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-
-class WatchSession(db.Model):
-    __tablename__ = 'watch_session'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
-    session_token = db.Column(db.String(100), unique=True, nullable=False)
-    
-    # Timing Data
-    start_time = db.Column(db.DateTime, default=datetime.utcnow)
-    end_time = db.Column(db.DateTime)
-    watch_duration = db.Column(db.Integer, default=0)  # seconds actually watched
-    video_length = db.Column(db.Integer)  # total video length
-    completion_percentage = db.Column(db.Float, default=0.0)
-    
-    # Behavioral Monitoring
-    focus_lost_count = db.Column(db.Integer, default=0)
-    tab_switches = db.Column(db.Integer, default=0)
-    window_blur_events = db.Column(db.Integer, default=0)
-    back_button_pressed = db.Column(db.Boolean, default=False)
-    fast_forward_attempts = db.Column(db.Integer, default=0)
-    rewind_attempts = db.Column(db.Integer, default=0)
-    pause_count = db.Column(db.Integer, default=0)
-    volume_changes = db.Column(db.Integer, default=0)
-    fullscreen_toggles = db.Column(db.Integer, default=0)
-    
-    # Interaction Tracking
-    mouse_movements = db.Column(db.Integer, default=0)
-    mouse_clicks = db.Column(db.Integer, default=0)
-    keyboard_events = db.Column(db.Integer, default=0)
-    scroll_events = db.Column(db.Integer, default=0)
-    
-    # Quality Metrics
-    video_buffer_events = db.Column(db.Integer, default=0)
-    video_errors = db.Column(db.Integer, default=0)
-    network_interruptions = db.Column(db.Integer, default=0)
-    
-    # Anti-Cheat Flags
-    reward_given = db.Column(db.Boolean, default=False)
-    cheating_detected = db.Column(db.Boolean, default=False)
-    cheat_reason = db.Column(db.String(500))
-    is_completed = db.Column(db.Boolean, default=False)
-    is_suspicious = db.Column(db.Boolean, default=False)
-    manual_review_required = db.Column(db.Boolean, default=False)
-    
-    # Technical Data
-    ip_address = db.Column(db.String(45))
-    user_agent = db.Column(db.Text)
-    browser_fingerprint = db.Column(db.String(200))
-    screen_resolution = db.Column(db.String(20))
-    connection_speed = db.Column(db.String(20))  # Estimated connection speed
+    # Security
+    last_ip = models.GenericIPAddressField(null=True, blank=True)
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    account_locked_until = models.DateTimeField(null=True, blank=True)
     
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationships
-    user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
-    video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    # Indexes for performance
-    __table_args__ = (
-        Index('idx_user_date', 'user_id', 'created_at'),
-        Index('idx_session_token', 'session_token'),
-        Index('idx_suspicious', 'is_suspicious', 'cheating_detected'),
-    )
+    def __str__(self):
+        return self.username
 
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = str(uuid.uuid4())[:8].upper()
+        super().save(*args, **kwargs)
 
-class MouseMovementPattern(db.Model):
-    """Track mouse movement patterns for bot detection"""
-    id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    
-    # Movement Data (stored as JSON)
-    movement_data = db.Column(JSON)  # Array of {x, y, timestamp, event_type}
-    total_distance = db.Column(db.Float, default=0.0)
-    average_speed = db.Column(db.Float, default=0.0)
-    movement_entropy = db.Column(db.Float, default=0.0)  # Randomness measure
-    
-    # Pattern Analysis
-    straight_line_ratio = db.Column(db.Float, default=0.0)  # How often moves in straight lines
-    pause_frequency = db.Column(db.Float, default=0.0)  # How often mouse pauses
-    acceleration_variance = db.Column(db.Float, default=0.0)  # Speed change patterns
-    
-    # Bot Detection Scores
-    human_likelihood = db.Column(db.Float, default=0.5)  # 0.0 = bot, 1.0 = human
-    pattern_regularity = db.Column(db.Float, default=0.0)  # Too regular = bot
-    
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    session = db.relationship('WatchSession', backref=db.backref('mouse_patterns', lazy=True))
-    user = db.relationship('User', backref=db.backref('mouse_patterns', lazy=True))
+    def is_account_locked(self):
+        """Check if account is temporarily locked"""
+        if self.account_locked_until and self.account_locked_until > timezone.now():
+            return True
+        return False
+
+    def can_watch_videos(self):
+        """Check if user can watch videos (not banned, verified, etc.)"""
+        return (self.is_verified and 
+                not self.is_banned and 
+                not self.is_account_locked() and
+                self.trust_score >= 50.00)
+
+    def reset_daily_stats(self):
+        """Reset daily statistics"""
+        self.videos_watched_today = 0
+        self.daily_online_time = 0
+        self.is_active_today = False
+        self.save()
 
 
-class BiometricData(db.Model):
-    """Store behavioral biometric data"""
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
-    
-    # Typing Patterns
-    keystroke_dynamics = db.Column(JSON)  # Timing between keystrokes
-    typing_rhythm_score = db.Column(db.Float, default=0.0)
-    
-    # Click Patterns
-    click_timing_data = db.Column(JSON)  # Time between clicks
-    double_click_timing = db.Column(db.Float, default=0.0)
-    click_pressure_variance = db.Column(db.Float, default=0.0)
-    
-    # Scroll Patterns
-    scroll_velocity_pattern = db.Column(JSON)
-    scroll_acceleration_pattern = db.Column(JSON)
-    
-    # Touch Patterns (for mobile)
-    touch_pressure_data = db.Column(JSON)
-    swipe_velocity_data = db.Column(JSON)
-    
-    # Device Orientation (mobile)
-    device_orientation_changes = db.Column(db.Integer, default=0)
-    accelerometer_data = db.Column(JSON)
-    
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', backref=db.backref('biometric_data', lazy=True))
+class IPLog(models.Model):
+    """Track user IP addresses for security"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ip_logs')
+    ip_address = models.GenericIPAddressField()
+    user_agent = models.TextField(blank=True)
+    action = models.CharField(max_length=50, default='login')
+    country = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    is_suspicious = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user', 'timestamp']),
+            models.Index(fields=['ip_address', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.ip_address} - {self.action}"
 
 
-class NetworkAnalysis(db.Model):
-    """Analyze network patterns for fraud detection"""
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    ip_address = db.Column(db.String(45), nullable=False)
-    
-    # Geolocation Data
-    country = db.Column(db.String(2))  # ISO country code
-    region = db.Column(db.String(50))
-    city = db.Column(db.String(50))
-    latitude = db.Column(db.Float)
-    longitude = db.Column(db.Float)
-    timezone = db.Column(db.String(50))
-    
-    # ISP Information
-    isp = db.Column(db.String(100))
-    organization = db.Column(db.String(100))
-    as_number = db.Column(db.String(20))  # Autonomous System Number
-    
-    # Risk Indicators
-    is_proxy = db.Column(db.Boolean, default=False)
-    is_vpn = db.Column(db.Boolean, default=False)
-    is_tor = db.Column(db.Boolean, default=False)
-    is_datacenter = db.Column(db.Boolean, default=False)
-    is_mobile = db.Column(db.Boolean, default=False)
-    is_hosting = db.Column(db.Boolean, default=False)
-    
-    # Connection Analysis
-    connection_type = db.Column(db.String(20))  # broadband, mobile, satellite
-    estimated_speed = db.Column(db.String(20))
-    rtt_ms = db.Column(db.Integer)  # Round trip time
-    
-    # Reputation Scores
-    ip_reputation_score = db.Column(db.Float, default=0.0)  # Third-party reputation
-    threat_level = db.Column(db.String(20), default='low')
-    
-    # Usage Patterns
-    users_from_ip = db.Column(db.Integer, default=1)  # How many users from this IP
-    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', backref=db.backref('network_analyses', lazy=True))
+class ContentCategory(models.Model):
+    """Categories for videos/content with enhanced features"""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    reward_multiplier = models.DecimalField(max_digits=3, decimal_places=2, default=1.00)
+    min_trust_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    max_daily_videos = models.PositiveIntegerField(default=50)
+    is_active = models.BooleanField(default=True)
+    requires_verification = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "Content Categories"
+
+    def __str__(self):
+        return self.name
 
 
-class FraudDetectionLog(db.Model):
-    """Log all fraud detection events and decisions"""
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
+class Video(models.Model):
+    """Enhanced video content model"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    video_url = models.URLField()
+    thumbnail_url = models.URLField(blank=True)
+    duration = models.PositiveIntegerField(help_text="Duration in seconds")
+    category = models.ForeignKey(ContentCategory, on_delete=models.CASCADE)
     
-    # Detection Info
-    detection_type = db.Column(db.String(50), nullable=False)  # mouse_bot, proxy, pattern, etc.
-    rule_triggered = db.Column(db.String(100))  # Which rule was triggered
-    confidence_score = db.Column(db.Float, default=0.0)  # 0.0-1.0 confidence
-    risk_score = db.Column(db.Float, default=0.0)  # Calculated risk score
+    # Reward System
+    base_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.01)
+    bonus_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    minimum_watch_time = models.PositiveIntegerField(default=30, help_text="Minimum watch time in seconds")
+    minimum_watch_percentage = models.PositiveIntegerField(default=70, help_text="Minimum watch percentage")
     
-    # Evidence Data
-    evidence_data = db.Column(JSON)  # Store detection evidence
-    raw_data = db.Column(JSON)  # Raw data that triggered detection
+    # Restrictions
+    max_views_per_user = models.PositiveIntegerField(default=1)
+    cooldown_hours = models.PositiveIntegerField(default=0, help_text="Hours before user can rewatch")
+    min_account_age_days = models.PositiveIntegerField(default=0)
+    geographic_restrictions = models.JSONField(default=list, blank=True)
     
-    # Actions Taken
-    action_taken = db.Column(db.String(50))  # flag, warn, restrict, ban, none
-    automated_action = db.Column(db.Boolean, default=True)
-    manual_review_required = db.Column(db.Boolean, default=False)
+    # Status and Stats
+    is_active = models.BooleanField(default=True)
+    is_featured = models.BooleanField(default=False)
+    views_count = models.PositiveIntegerField(default=0)
+    unique_viewers = models.PositiveIntegerField(default=0)
+    total_rewards_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
-    # Review Info
-    reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    reviewed_at = db.Column(db.DateTime)
-    review_decision = db.Column(db.String(20))  # confirmed, false_positive, inconclusive
-    review_notes = db.Column(db.Text)
+    # Quality Control
+    quality_score = models.DecimalField(max_digits=3, decimal_places=2, default=5.00)
+    reported_count = models.PositiveIntegerField(default=0)
+    is_under_review = models.BooleanField(default=False)
     
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('fraud_logs', lazy=True))
-    reviewer = db.relationship('User', foreign_keys=[reviewed_by], backref=db.backref('reviewed_cases', lazy=True))
-    session = db.relationship('WatchSession', backref=db.backref('fraud_logs', lazy=True))
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def calculated_reward(self):
+        """Calculate total reward including bonus"""
+        base = self.base_reward * self.category.reward_multiplier
+        return base + self.bonus_reward
+
+    @property
+    def minimum_watch_seconds(self):
+        """Calculate minimum watch time based on percentage or fixed time"""
+        percentage_time = (self.duration * self.minimum_watch_percentage) // 100
+        return max(self.minimum_watch_time, percentage_time)
+
+    def can_user_watch(self, user):
+        """Check if user can watch this video"""
+        if not self.is_active or (self.expires_at and self.expires_at < timezone.now()):
+            return False, "Video not available"
+        
+        if user.trust_score < self.category.min_trust_score:
+            return False, "Trust score too low"
+        
+        # Check if user has already watched maximum times
+        watch_count = WatchSession.objects.filter(
+            user=user, 
+            video=self,
+            is_completed=True
+        ).count()
+        
+        if watch_count >= self.max_views_per_user:
+            return False, "Maximum views reached"
+        
+        # Check cooldown
+        if self.cooldown_hours > 0:
+            last_watch = WatchSession.objects.filter(
+                user=user,
+                video=self,
+                is_completed=True
+            ).order_by('-end_time').first()
+            
+            if last_watch:
+                cooldown_end = last_watch.end_time + timezone.timedelta(hours=self.cooldown_hours)
+                if timezone.now() < cooldown_end:
+                    return False, f"Cooldown active until {cooldown_end}"
+        
+        return True, "OK"
 
 
-class WhitelistedIP(db.Model):
-    """IPs that are whitelisted from certain checks"""
-    id = db.Column(db.Integer, primary_key=True)
-    ip_address = db.Column(db.String(45), unique=True, nullable=False)
-    ip_range = db.Column(db.String(50))  # CIDR notation for ranges
-    reason = db.Column(db.String(200))
-    added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime)  # Optional expiration
-    is_active = db.Column(db.Boolean, default=True)
+class WatchSession(models.Model):
+    """Enhanced watch session tracking with anti-cheat"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    video = models.ForeignKey(Video, on_delete=models.CASCADE)
     
-    added_by_user = db.relationship('User', backref=db.backref('whitelisted_ips', lazy=True))
+    # Session Timing
+    start_time = models.DateTimeField(auto_now_add=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    duration_watched = models.PositiveIntegerField(default=0, help_text="Duration watched in seconds")
+    watch_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    
+    # Status
+    is_completed = models.BooleanField(default=False)
+    is_valid = models.BooleanField(default=True)
+    reward_earned = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    reward_paid = models.BooleanField(default=False)
+    
+    # Anti-Cheat Data
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    heartbeat_count = models.PositiveIntegerField(default=0)
+    tab_switches = models.PositiveIntegerField(default=0)
+    play_speed_changes = models.PositiveIntegerField(default=0)
+    suspicious_activity = models.JSONField(default=dict, blank=True)
+    
+    # Quality Metrics
+    average_playback_speed = models.DecimalField(max_digits=3, decimal_places=2, default=1.00)
+    interaction_count = models.PositiveIntegerField(default=0)
+    volume_changes = models.PositiveIntegerField(default=0)
+    
+    # Validation
+    is_flagged = models.BooleanField(default=False)
+    flag_reason = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_sessions')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'start_time']),
+            models.Index(fields=['video', 'start_time']),
+            models.Index(fields=['is_completed', 'reward_paid']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.video.title}"
+
+    def clean(self):
+        """Validate watch session data"""
+        if self.duration_watched > self.video.duration + 30:  # 30 second buffer
+            raise ValidationError("Watch duration cannot exceed video duration")
+        
+        if self.watch_percentage > 100:
+            raise ValidationError("Watch percentage cannot exceed 100%")
+
+    def calculate_watch_percentage(self):
+        """Calculate and update watch percentage"""
+        if self.video.duration > 0:
+            self.watch_percentage = (self.duration_watched / self.video.duration) * 100
+        return self.watch_percentage
+
+    def is_eligible_for_reward(self):
+        """Check if session is eligible for reward"""
+        if not self.is_valid or self.is_flagged:
+            return False
+        
+        min_watch_time = self.video.minimum_watch_seconds
+        return (self.duration_watched >= min_watch_time and 
+                self.watch_percentage >= self.video.minimum_watch_percentage)
+
+    def save(self, *args, **kwargs):
+        # Calculate watch percentage
+        self.calculate_watch_percentage()
+        
+        # Check completion and award reward
+        if (self.is_eligible_for_reward() and 
+            not self.is_completed and 
+            not self.reward_paid):
+            
+            self.is_completed = True
+            self.reward_earned = self.video.calculated_reward
+            
+            # Create transaction record
+            Transaction.objects.create(
+                user=self.user,
+                transaction_type='WATCH_REWARD',
+                amount=self.reward_earned,
+                description=f"Watched: {self.video.title}",
+                reference_id=str(self.id),
+                status='PENDING'
+            )
+            
+        super().save(*args, **kwargs)
 
 
-class BlacklistedIP(db.Model):
-    """IPs that are blocked"""
-    id = db.Column(db.Integer, primary_key=True)
-    ip_address = db.Column(db.String(45), unique=True, nullable=False)
-    ip_range = db.Column(db.String(50))  # CIDR notation for ranges
-    reason = db.Column(db.String(200))
-    blocked_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime)  # Optional expiration
-    is_active = db.Column(db.Boolean, default=True)
+class DailyReward(models.Model):
+    """Enhanced daily login rewards with streaks"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField(default=timezone.now)
     
-    blocked_by_user = db.relationship('User', backref=db.backref('blacklisted_ips', lazy=True))
+    # Requirements
+    online_duration = models.PositiveIntegerField(default=0, help_text="Time spent online in seconds")
+    required_duration = models.PositiveIntegerField(default=300, help_text="Required 5 minutes online")
+    videos_watched = models.PositiveIntegerField(default=0)
+    required_videos = models.PositiveIntegerField(default=3)
+    
+    # Reward Details
+    base_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.05)
+    streak_bonus = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    total_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.05)
+    
+    # Status
+    requirements_met = models.BooleanField(default=False)
+    is_claimed = models.BooleanField(default=False)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    
+    # Streak Info
+    consecutive_days = models.PositiveIntegerField(default=1)
+    is_streak_day = models.BooleanField(default=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['user', 'date']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['date', 'is_claimed']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.date}"
+
+    def calculate_streak_bonus(self):
+        """Calculate bonus based on consecutive days"""
+        if self.consecutive_days >= 30:
+            self.streak_bonus = self.base_reward * 2.0  # 200% bonus
+        elif self.consecutive_days >= 14:
+            self.streak_bonus = self.base_reward * 1.0  # 100% bonus
+        elif self.consecutive_days >= 7:
+            self.streak_bonus = self.base_reward * 0.5  # 50% bonus
+        else:
+            self.streak_bonus = 0.00
+        
+        self.total_reward = self.base_reward + self.streak_bonus
+
+    def check_requirements(self):
+        """Check if all requirements are met"""
+        self.requirements_met = (
+            self.online_duration >= self.required_duration and
+            self.videos_watched >= self.required_videos
+        )
+        return self.requirements_met
+
+    def can_claim_reward(self):
+        """Check if user can claim daily reward"""
+        return (self.check_requirements() and 
+                not self.is_claimed and 
+                not self.user.is_banned)
+
+    def claim_reward(self):
+        """Claim daily reward and update user balance"""
+        if self.can_claim_reward():
+            self.calculate_streak_bonus()
+            self.is_claimed = True
+            self.claimed_at = timezone.now()
+            
+            # Update user earnings
+            self.user.total_earnings += self.total_reward
+            self.user.available_balance += self.total_reward
+            self.user.total_daily_bonuses += 1
+            self.user.consecutive_days = self.consecutive_days
+            self.user.last_bonus_claim = timezone.now()
+            self.user.save()
+            
+            # Create transaction record
+            Transaction.objects.create(
+                user=self.user,
+                transaction_type='DAILY_REWARD',
+                amount=self.total_reward,
+                description=f"Daily reward - Day {self.consecutive_days}",
+                reference_id=str(self.id)
+            )
+            
+            self.save()
+            return True
+        return False
 
 
-# Keep your existing models with anti-cheat enhancements
-class Video(db.Model): 
-    id = db.Column(db.Integer, primary_key=True) 
-    title = db.Column(db.String(200), nullable=False) 
-    video_url = db.Column(db.String(500), nullable=False) 
-    added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    is_active = db.Column(db.Boolean, default=True)
-    min_watch_time = db.Column(db.Integer, default=30)  # seconds
-    reward_amount = db.Column(db.Float, default=0.01)
+class Transaction(models.Model):
+    """Enhanced transaction logging"""
+    TRANSACTION_TYPES = [
+        ('WATCH_REWARD', 'Watch Reward'),
+        ('DAILY_REWARD', 'Daily Login Reward'),
+        ('REFERRAL_BONUS', 'Referral Bonus'),
+        ('STREAK_BONUS', 'Streak Bonus'),
+        ('ADMIN_BONUS', 'Admin Bonus'),
+        ('WITHDRAWAL', 'Withdrawal'),
+        ('WITHDRAWAL_FEE', 'Withdrawal Fee'),
+        ('REFUND', 'Refund'),
+        ('PENALTY', 'Penalty'),
+        ('CORRECTION', 'Balance Correction'),
+    ]
     
-    # Anti-cheat for videos
-    max_daily_views_per_user = db.Column(db.Integer, default=5)
-    requires_interaction = db.Column(db.Boolean, default=True)  # Require mouse/keyboard activity
-    skip_detection_enabled = db.Column(db.Boolean, default=True)
-    quality_threshold = db.Column(db.Float, default=0.8)  # Minimum completion quality
+    TRANSACTION_STATUS = [
+        ('PENDING', 'Pending'),
+        ('PROCESSING', 'Processing'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
+        ('CANCELLED', 'Cancelled'),
+        ('REVERSED', 'Reversed'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    fee = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    net_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20, choices=TRANSACTION_STATUS, default='PENDING')
     
-    uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
+    # Additional Info
+    description = models.TextField(blank=True)
+    reference_id = models.CharField(max_length=100, blank=True)
+    external_reference = models.CharField(max_length=100, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    
+    # Processing Info
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_transactions')
+    processed_at = models.DateTimeField(null=True, blank=True)
+    failure_reason = models.TextField(blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'transaction_type', 'created_at']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['reference_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.transaction_type} - {self.amount}"
+
+    def save(self, *args, **kwargs):
+        # Calculate net amount
+        if self.amount >= 0:  # Credit
+            self.net_amount = self.amount - self.fee
+        else:  # Debit
+            self.net_amount = self.amount - self.fee
+        
+        super().save(*args, **kwargs)
+
+class UserStats(models.Model):
+    """Enhanced daily user statistics"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    date = models.DateField(default=timezone.now)
+    
+    # Daily Activity
+    videos_watched = models.PositiveIntegerField(default=0)
+    total_watch_time = models.PositiveIntegerField(default=0, help_text="Total watch time in seconds")
+    online_duration = models.PositiveIntegerField(default=0, help_text="Time spent online in seconds")
+    sessions_count = models.PositiveIntegerField(default=0)
+    
+    # Earnings
+    daily_earnings = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    watch_rewards = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    bonus_rewards = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    referral_earnings = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    
+    # Engagement Metrics
+    completed_sessions = models.PositiveIntegerField(default=0)
+    invalid_sessions = models.PositiveIntegerField(default=0)
+    flagged_sessions = models.PositiveIntegerField(default=0)
+    average_watch_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    
+    # Referral Activity
+    new_referrals = models.PositiveIntegerField(default=0)
+    active_referrals = models.PositiveIntegerField(default=0)
+    
+    # Quality Metrics
+    trust_score_change = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    violations_count = models.PositiveIntegerField(default=0)
+    
+    # Streaks
+    is_streak_day = models.BooleanField(default=False)
+    consecutive_days = models.PositiveIntegerField(default=0)
+    
+    # Login/Activity
+    first_login = models.DateTimeField(null=True, blank=True)
+    last_activity = models.DateTimeField(null=True, blank=True)
+    login_count = models.PositiveIntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'date']
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['date', 'daily_earnings']),
+            models.Index(fields=['user', 'consecutive_days']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.date}"
+
+    def calculate_completion_rate(self):
+        """Calculate session completion rate"""
+        total_sessions = self.completed_sessions + self.invalid_sessions
+        if total_sessions > 0:
+            return (self.completed_sessions / total_sessions) * 100
+        return 0.00
+
+    def update_daily_stats(self):
+        """Update daily statistics from related models"""
+        # Get today's watch sessions
+        today_sessions = WatchSession.objects.filter(
+            user=self.user,
+            start_time__date=self.date
+        )
+        
+        self.videos_watched = today_sessions.count()
+        self.completed_sessions = today_sessions.filter(is_completed=True).count()
+        self.invalid_sessions = today_sessions.filter(is_valid=False).count()
+        self.flagged_sessions = today_sessions.filter(is_flagged=True).count()
+        
+        # Calculate total watch time
+        self.total_watch_time = sum(
+            session.duration_watched for session in today_sessions
+        )
+        
+        # Calculate average watch percentage
+        if today_sessions.exists():
+            self.average_watch_percentage = today_sessions.aggregate(
+                avg_percentage=models.Avg('watch_percentage')
+            )['avg_percentage'] or 0.00
+        
+        # Get today's transactions
+        today_transactions = Transaction.objects.filter(
+            user=self.user,
+            created_at__date=self.date,
+            status='COMPLETED'
+        )
+        
+        self.watch_rewards = today_transactions.filter(
+            transaction_type='WATCH_REWARD'
+        ).aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0.00
+        
+        self.bonus_rewards = today_transactions.filter(
+            transaction_type__in=['DAILY_REWARD', 'STREAK_BONUS']
+        ).aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0.00
+        
+        self.referral_earnings = today_transactions.filter(
+            transaction_type='REFERRAL_BONUS'
+        ).aggregate(
+            total=models.Sum('amount')
+        )['total'] or 0.00
+        
+        self.daily_earnings = self.watch_rewards + self.bonus_rewards + self.referral_earnings
+        
+        self.save()
+
+
+# Additional models that might be useful for the complete system
+
+class WithdrawalRequest(models.Model):
+    """Handle withdrawal requests"""
+    WITHDRAWAL_METHODS = [
+        ('BANK', 'Bank Transfer'),
+        ('PAYPAL', 'PayPal'),
+        ('MOBILE_MONEY', 'Mobile Money'),
+        ('CRYPTO', 'Cryptocurrency'),
+    ]
+    
+    WITHDRAWAL_STATUS = [
+        ('PENDING', 'Pending'),
+        ('APPROVED', 'Approved'),
+        ('PROCESSING', 'Processing'),
+        ('COMPLETED', 'Completed'),
+        ('REJECTED', 'Rejected'),
+        ('CANCELLED', 'Cancelled'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    fee = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
+    net_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    withdrawal_method = models.CharField(max_length=20, choices=WITHDRAWAL_METHODS)
+    payment_details = models.JSONField(default=dict)
+    
+    status = models.CharField(max_length=20, choices=WITHDRAWAL_STATUS, default='PENDING')
+    admin_notes = models.TextField(blank=True)
+    
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_withdrawals')
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.username} - {self.amount} - {self.status}"
+
+
+class SystemSettings(models.Model):
+    """System-wide settings"""
+    key = models.CharField(max_length=100, unique=True)
+    value = models.TextField()
+    data_type = models.CharField(max_length=20, choices=[
+        ('STRING', 'String'),
+        ('INTEGER', 'Integer'),
+        ('DECIMAL', 'Decimal'),
+        ('BOOLEAN', 'Boolean'),
+        ('JSON', 'JSON'),
+    ], default='STRING')
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.key
+
+    def get_value(self):
+        """Get typed value"""
+        if self.data_type == 'INTEGER':
+            return int(self.value)
+        elif self.data_type == 'DECIMAL':
+            return Decimal(self.value)
+        elif self.data_type == 'BOOLEAN':
+            return self.value.lower() in ('true', '1', 'yes')
+        elif self.data_type == 'JSON':
+            return json.loads(self.value)
+        return self.value
+   
 
 #==== Util: Send Email ====
 
