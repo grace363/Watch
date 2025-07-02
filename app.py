@@ -31,6 +31,24 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///watch_and_earn.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# Define your models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+
+# Create tables
+with app.app_context():
+    db.create_all()
+
 # Initialize Flask app and database
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
@@ -530,21 +548,6 @@ class HoneypotInteraction(db.Model):
     automatic_ban = db.Column(db.Boolean, default=True)  # Auto-ban on honeypot interaction
     
     user = db.relationship('User', backref=db.backref('honeypot_interactions', lazy=True))
-
-# Helper function to initialize the database
-def init_db(app):
-    """Initialize the database with the Flask app"""
-    db.init_app(app)
-    
-    with app.app_context():
-        try:
-            # Create all tables
-            db.create_all()
-            print("✅ Database tables created successfully")
-        except Exception as e:
-            print(f"❌ Database initialization failed: {e}")
-            raise e
-    
    
 #==== Anti-Cheat Utility Functions ====
 
