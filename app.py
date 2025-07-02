@@ -23,7 +23,19 @@ from datetime import datetime
 from sqlalchemy import String
 import hashlib
 from datetime import datetime, date
-
+import hashlib
+import secrets
+from datetime import datetime, timedelta, date
+from werkzeug.security import check_password_hash, generate_password_hash
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from models import (
+    db, User, IPLog, WithdrawalRequest, Video, WatchSession, 
+    DailySession, Withdrawal, Earning, DeviceFingerprint, 
+    SecurityEvent, MouseMovement, KeystrokePattern, GeoLocation, 
+    RiskScore, HoneypotInteraction
+)
 
 # Initialize Flask app and database
 app = Flask(__name__)
@@ -1282,49 +1294,175 @@ def login():
             if not email_or_username or not password:
                 return jsonify({'error': 'Email/Username and password are required'}), 400
             
+            # Collect device fingerprinting data
+            device_data = {
+                'screen_resolution': request.form.get('screen_resolution', ''),
+                'timezone': request.form.get('timezone', ''),
+                'language': request.form.get('language', ''),
+                'device_fingerprint': request.form.get('device_fingerprint', ''),
+                'user_agent': request.headers.get('User-Agent', ''),
+                'ip_address': get_client_ip()
+            }
+            
+            # Get keystroke pattern data if available
+            keystroke_patterns = request.form.get('keystroke_patterns')
+            focus_lost = request.form.get('focus_lost_during_login') == 'true'
+            
             # Try to find user by email first, then by username
             user = User.query.filter_by(email=email_or_username).first()
             if not user:
                 user = User.query.filter_by(username=email_or_username).first()
             
-            if user and user.is_banned:
-                return jsonify({'error': f'Account banned: {user.ban_reason}'}), 403
-            
-            if user and check_password_hash(user.password_hash, password):
-                if not user.is_verified:
-                    return jsonify({'error': 'Please verify your email before logging in'}), 401
+            # Security checks before password verification
+            if user:
+                # Check if user is banned
+                if user.is_banned:
+                    # Log security event
+                    log_security_event(
+                        user_id=user.id,
+                        event_type='banned_user_login_attempt',
+                        severity='high',
+                        description=f'Banned user attempted login: {user.ban_reason}',
+                        ip_address=device_data['ip_address'],
+                        user_agent=device_data['user_agent']
+                    )
+                    return jsonify({
+                        'error': f'Account suspended: {user.ban_reason}',
+                        'account_banned': True,
+                        'ban_reason': user.ban_reason
+                    }), 403
                 
-                # Update login info
-                user.last_login_date = datetime.utcnow()
-                user.session_start_time = datetime.utcnow()
-                user.last_heartbeat = datetime.utcnow()
-                
-                if ENABLE_IP_TRACKING:
-                    user.last_ip = get_client_ip()
-                
-                # Check if new day for daily bonus reset
-                today = datetime.utcnow().date()
-                if not user.last_video_date or user.last_video_date != today:
-                    user.daily_bonus_given = False
-                    user.videos_watched_today = 0
-                    user.daily_online_time = 0
-                    user.last_video_date = today
-                
-                db.session.commit()
-                
-                # Log login IP
-                log_user_ip(user.id, "login")
-                
-                # Set session
-                session['user_id'] = user.id
-                session['account_type'] = user.account_type
-                
-                dashboard_route = 'youtuber_dashboard' if user.account_type == 'YouTuber' else 'user_dashboard'
-                return jsonify({
-                    'success': True,
-                    'redirect': url_for(dashboard_route)
-                })
+                # Check password
+                if check_password_hash(user.password_hash, password):
+                    # Verify email before proceeding
+                    if not user.is_verified:
+                        return jsonify({
+                            'error': 'Please verify your email before logging in',
+                            'needs_verification': True
+                        }), 401
+                    
+                    # Perform fraud detection checks
+                    fraud_score = perform_fraud_detection(user, device_data, keystroke_patterns, focus_lost)
+                    
+                    # Check if user should be flagged for suspicious activity
+                    if fraud_score['risk_level'] in ['high', 'critical']:
+                        user.suspicious_activity_count += 1
+                        user.risk_level = fraud_score['risk_level']
+                        user.last_risk_assessment = datetime.utcnow()
+                        
+                        # Log high-risk login attempt
+                        log_security_event(
+                            user_id=user.id,
+                            event_type='high_risk_login',
+                            severity=fraud_score['risk_level'],
+                            description=f'High-risk login detected. Fraud score: {fraud_score["fraud_probability"]:.2f}',
+                            ip_address=device_data['ip_address'],
+                            user_agent=device_data['user_agent']
+                        )
+                        
+                        # If critical risk, prevent login
+                        if fraud_score['risk_level'] == 'critical':
+                            return jsonify({
+                                'error': 'Login blocked due to suspicious activity. Please contact support.',
+                                'suspicious_activity': True
+                            }), 403
+                    
+                    # Update user login information
+                    user.last_login_date = datetime.utcnow()
+                    user.session_start_time = datetime.utcnow()
+                    user.last_heartbeat = datetime.utcnow()
+                    user.current_session_start = datetime.utcnow()
+                    
+                    # Update device tracking
+                    if ENABLE_IP_TRACKING:
+                        user.last_ip = device_data['ip_address']
+                        user.last_ip_address = device_data['ip_address']  # Your model has both fields
+                    
+                    # Update device fingerprinting data
+                    user.device_fingerprint = device_data['device_fingerprint']
+                    user.time_zone = device_data['timezone']
+                    user.screen_resolution = device_data['screen_resolution']
+                    user.user_agent_hash = hashlib.sha256(device_data['user_agent'].encode()).hexdigest()
+                    user.updated_at = datetime.utcnow()
+                    
+                    # Update fraud scores
+                    user.ml_fraud_probability = fraud_score['fraud_probability']
+                    user.behavioral_score = fraud_score.get('behavioral_score', 0.0)
+                    user.click_pattern_score = fraud_score.get('click_pattern_score', 0.0)
+                    user.watch_velocity_score = fraud_score.get('watch_velocity_score', 0.0)
+                    
+                    # Check if new day for daily bonus reset
+                    today = datetime.utcnow().date()
+                    if not user.last_video_date or user.last_video_date != today:
+                        user.daily_bonus_given = False
+                        user.videos_watched_today = 0
+                        user.daily_online_time = 0
+                        user.last_video_date = today
+                        user.last_activity_date = today
+                    
+                    # Generate session token
+                    session_token = secrets.token_urlsafe(32)
+                    user.session_token = session_token
+                    
+                    # Save all changes
+                    db.session.commit()
+                    
+                    # Log successful login
+                    log_user_ip(user.id, "login")
+                    
+                    # Store device fingerprint
+                    store_device_fingerprint(user.id, device_data)
+                    
+                    # Store keystroke patterns if available
+                    if keystroke_patterns:
+                        store_keystroke_patterns(user.id, session_token, keystroke_patterns)
+                    
+                    # Store risk score
+                    store_risk_score(user.id, None, fraud_score)
+                    
+                    # Set session
+                    session['user_id'] = user.id
+                    session['account_type'] = user.account_type
+                    session['session_token'] = session_token
+                    
+                    # Log successful login event
+                    log_security_event(
+                        user_id=user.id,
+                        event_type='successful_login',
+                        severity='low',
+                        description=f'User logged in successfully. Risk level: {fraud_score["risk_level"]}',
+                        ip_address=device_data['ip_address'],
+                        user_agent=device_data['user_agent'],
+                        session_token=session_token
+                    )
+                    
+                    dashboard_route = 'youtuber_dashboard' if user.account_type == 'YouTuber' else 'user_dashboard'
+                    return jsonify({
+                        'success': True,
+                        'message': 'Login successful!',
+                        'redirect': url_for(dashboard_route)
+                    })
+                else:
+                    # Wrong password - log failed attempt
+                    log_security_event(
+                        user_id=user.id,
+                        event_type='failed_login_attempt',
+                        severity='medium',
+                        description='Failed login attempt - incorrect password',
+                        ip_address=device_data['ip_address'],
+                        user_agent=device_data['user_agent']
+                    )
+                    return jsonify({'error': 'Invalid email/username or password'}), 401
             else:
+                # User not found - log attempt
+                log_security_event(
+                    user_id=None,
+                    event_type='failed_login_attempt',
+                    severity='low',
+                    description=f'Failed login attempt - user not found: {email_or_username}',
+                    ip_address=device_data['ip_address'],
+                    user_agent=device_data['user_agent']
+                )
                 return jsonify({'error': 'Invalid email/username or password'}), 401
                 
         except Exception as e:
@@ -1333,6 +1471,240 @@ def login():
             return jsonify({'error': 'Login failed. Please try again.'}), 500
     
     return render_template('login.html')
+
+
+# Helper functions for the enhanced login system
+
+def perform_fraud_detection(user, device_data, keystroke_patterns, focus_lost):
+    """Perform comprehensive fraud detection analysis"""
+    fraud_probability = 0.0
+    risk_factors = []
+    
+    # Check for proxy/VPN (you'll need to implement IP checking)
+    if is_proxy_or_vpn(device_data['ip_address']):
+        fraud_probability += 0.3
+        risk_factors.append('proxy_detected')
+        user.proxy_detected = True
+    
+    # Check device fingerprint consistency
+    if user.device_fingerprint and user.device_fingerprint != device_data['device_fingerprint']:
+        user.device_changes_count += 1
+        if user.device_changes_count > 5:  # Threshold for suspicious device changes
+            fraud_probability += 0.2
+            risk_factors.append('frequent_device_changes')
+    
+    # Check browser/user agent changes
+    current_ua_hash = hashlib.sha256(device_data['user_agent'].encode()).hexdigest()
+    if user.user_agent_hash and user.user_agent_hash != current_ua_hash:
+        user.browser_changes_count += 1
+        if user.browser_changes_count > 3:
+            fraud_probability += 0.15
+            risk_factors.append('frequent_browser_changes')
+    
+    # Analyze keystroke patterns (basic implementation)
+    behavioral_score = 0.0
+    if keystroke_patterns:
+        behavioral_score = analyze_keystroke_patterns(keystroke_patterns)
+        if behavioral_score > 0.7:  # Highly suspicious patterns
+            fraud_probability += 0.25
+            risk_factors.append('suspicious_keystroke_patterns')
+    
+    # Check for focus loss during login (possible automation)
+    if focus_lost:
+        fraud_probability += 0.1
+        risk_factors.append('focus_lost_during_login')
+    
+    # Check login frequency (velocity)
+    recent_logins = IPLog.query.filter_by(
+        user_id=user.id,
+        action='login'
+    ).filter(
+        IPLog.timestamp > datetime.utcnow() - timedelta(hours=1)
+    ).count()
+    
+    if recent_logins > 10:  # More than 10 logins in an hour
+        fraud_probability += 0.2
+        risk_factors.append('high_login_velocity')
+    
+    # Check for automation patterns
+    if detect_automation_patterns(user, device_data):
+        fraud_probability += 0.4
+        risk_factors.append('automation_detected')
+        user.automation_detected = True
+    
+    # Determine risk level
+    if fraud_probability >= 0.8:
+        risk_level = 'critical'
+    elif fraud_probability >= 0.6:
+        risk_level = 'high'
+    elif fraud_probability >= 0.3:
+        risk_level = 'medium'
+    else:
+        risk_level = 'low'
+    
+    return {
+        'fraud_probability': min(fraud_probability, 1.0),
+        'risk_level': risk_level,
+        'risk_factors': risk_factors,
+        'behavioral_score': behavioral_score,
+        'click_pattern_score': 0.0,  # Implement click pattern analysis
+        'watch_velocity_score': 0.0  # Implement watch velocity analysis
+    }
+
+
+def log_security_event(user_id, event_type, severity, description, ip_address, user_agent, session_token=None):
+    """Log security events to the database"""
+    try:
+        security_event = SecurityEvent(
+            user_id=user_id,
+            event_type=event_type,
+            severity=severity,
+            description=description,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            session_token=session_token
+        )
+        db.session.add(security_event)
+        db.session.commit()
+    except Exception as e:
+        print(f"❌ Failed to log security event: {e}")
+        db.session.rollback()
+
+
+def store_device_fingerprint(user_id, device_data):
+    """Store or update device fingerprint"""
+    try:
+        fingerprint = DeviceFingerprint.query.filter_by(
+            user_id=user_id,
+            fingerprint_hash=device_data['device_fingerprint']
+        ).first()
+        
+        if fingerprint:
+            fingerprint.last_seen = datetime.utcnow()
+            fingerprint.times_seen += 1
+        else:
+            fingerprint = DeviceFingerprint(
+                user_id=user_id,
+                fingerprint_hash=device_data['device_fingerprint'],
+                screen_resolution=device_data['screen_resolution'],
+                timezone=device_data['timezone'],
+                language=device_data['language'],
+                user_agent=device_data['user_agent']
+            )
+            db.session.add(fingerprint)
+        
+        db.session.commit()
+    except Exception as e:
+        print(f"❌ Failed to store device fingerprint: {e}")
+        db.session.rollback()
+
+
+def store_keystroke_patterns(user_id, session_token, keystroke_data):
+    """Store keystroke patterns for behavioral analysis"""
+    try:
+        import json
+        patterns = json.loads(keystroke_data)
+        
+        for pattern in patterns:
+            keystroke = KeystrokePattern(
+                user_id=user_id,
+                session_token=session_token,
+                key_pressed=pattern.get('key', ''),
+                dwell_time=0.0,  # You'll need to calculate this
+                flight_time=pattern.get('timeDiff', 0) / 1000.0,  # Convert to seconds
+                is_suspicious=pattern.get('timeDiff', 0) < 50  # Very fast typing might be suspicious
+            )
+            db.session.add(keystroke)
+        
+        db.session.commit()
+    except Exception as e:
+        print(f"❌ Failed to store keystroke patterns: {e}")
+        db.session.rollback()
+
+
+def store_risk_score(user_id, session_id, fraud_score):
+    """Store ML-based risk score"""
+    try:
+        risk_score = RiskScore(
+            user_id=user_id,
+            session_id=session_id,
+            model_version='v1.0',
+            fraud_probability=fraud_score['fraud_probability'],
+            behavioral_score=fraud_score.get('behavioral_score', 0.0),
+            final_risk_level=fraud_score['risk_level'],
+            features_used=fraud_score.get('risk_factors', [])
+        )
+        db.session.add(risk_score)
+        db.session.commit()
+    except Exception as e:
+        print(f"❌ Failed to store risk score: {e}")
+        db.session.rollback()
+
+
+def analyze_keystroke_patterns(keystroke_data):
+    """Analyze keystroke patterns for bot detection"""
+    try:
+        import json
+        patterns = json.loads(keystroke_data)
+        
+        if not patterns:
+            return 0.0
+        
+        # Calculate average typing speed
+        time_diffs = [p.get('timeDiff', 0) for p in patterns if p.get('timeDiff', 0) > 0]
+        
+        if not time_diffs:
+            return 0.0
+        
+        avg_time = sum(time_diffs) / len(time_diffs)
+        
+        # Very consistent timing might indicate bot
+        variance = sum((t - avg_time) ** 2 for t in time_diffs) / len(time_diffs)
+        
+        # Low variance = more suspicious
+        if variance < 100:  # Very consistent timing
+            return 0.8
+        elif variance < 500:
+            return 0.4
+        else:
+            return 0.1
+            
+    except Exception as e:
+        print(f"❌ Keystroke analysis error: {e}")
+        return 0.0
+
+
+def is_proxy_or_vpn(ip_address):
+    """Check if IP address is from a proxy or VPN (basic implementation)"""
+    # You would implement actual IP checking here using services like:
+    # - IPQualityScore API
+    # - MaxMind GeoIP2
+    # - Proxycheck.io
+    # For now, return False (implement based on your chosen service)
+    return False
+
+
+def detect_automation_patterns(user, device_data):
+    """Detect automation/bot patterns"""
+    # Check for common automation indicators
+    user_agent = device_data['user_agent'].lower()
+    
+    # Common automation indicators in user agent
+    automation_indicators = [
+        'selenium', 'webdriver', 'bot', 'crawler', 'automation',
+        'phantomjs', 'headless', 'nightmare', 'puppeteer'
+    ]
+    
+    for indicator in automation_indicators:
+        if indicator in user_agent:
+            return True
+    
+    # Check for suspicious screen resolutions (common in headless browsers)
+    resolution = device_data.get('screen_resolution', '')
+    if resolution in ['1024x768', '1920x1080'] and 'headless' in user_agent:
+        return True
+    
+    return False
 
 @app.route('/confirm_email/<token>')
 def confirm_email(token):
