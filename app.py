@@ -18,6 +18,10 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 import logging 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, inspect
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+from sqlalchemy import String
+
 
 # Initialize Flask app and database
 app = Flask(__name__)
@@ -232,6 +236,7 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 
 #==== DB Models ====
 
+db = SQLAlchemy()
 class User(db.Model): 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(String(80), unique=True, nullable=False)
@@ -302,6 +307,9 @@ class User(db.Model):
     ml_fraud_probability = db.Column(db.Float, default=0.0)  # ML model fraud probability
     feature_vector_hash = db.Column(db.String(64))  # Hash of ML features for comparison
 
+    def __repr__(self):
+        return f'<User {self.username}>'
+
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
     id = db.Column(db.Integer, primary_key=True)
@@ -331,14 +339,14 @@ class Video(db.Model):
     added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
-    min_watch_time = db.Column(db.Integer, default=VIDEO_WATCH_TIME)  # seconds
-    reward_amount = db.Column(db.Float, default=VIDEO_REWARD_AMOUNT)
+    min_watch_time = db.Column(db.Integer, default=30)  # seconds - using default value
+    reward_amount = db.Column(db.Float, default=0.01)  # using default value
     
     # Add relationship
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
 
 class WatchSession(db.Model):
-    __tablename__ = 'watch_sessions'
+    __tablename__ = 'watch_session'  # Keep your original table name
     """Track individual video watch sessions for anti-cheat"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -514,7 +522,22 @@ class HoneypotInteraction(db.Model):
     automatic_ban = db.Column(db.Boolean, default=True)  # Auto-ban on honeypot interaction
     
     user = db.relationship('User', backref=db.backref('honeypot_interactions', lazy=True))
+
+# Helper function to initialize the database
+def init_db(app):
+    """Initialize the database with the Flask app"""
+    db.init_app(app)
     
+    with app.app_context():
+        try:
+            # Create all tables
+            db.create_all()
+            print("✅ Database tables created successfully")
+        except Exception as e:
+            print(f"❌ Database initialization failed: {e}")
+            raise e
+    
+   
 #==== Anti-Cheat Utility Functions ====
 
 def reset_daily_data_if_needed(user):
