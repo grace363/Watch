@@ -110,6 +110,15 @@
       margin-top: -5px;
       margin-bottom: 10px;
     }
+    .security-notice {
+      font-size: 0.8em;
+      color: #666;
+      text-align: center;
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -123,6 +132,12 @@
 
     <form id="login-form" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      
+      <!-- Hidden fields for device fingerprinting -->
+      <input type="hidden" name="screen_resolution" id="screen_resolution">
+      <input type="hidden" name="timezone" id="timezone">
+      <input type="hidden" name="language" id="language">
+      <input type="hidden" name="device_fingerprint" id="device_fingerprint">
 
       <label for="email">Email or Username:</label>
       <input type="text" name="email" id="email" required placeholder="Enter your email or username">
@@ -140,6 +155,10 @@
     <div class="link"><a href="/register">Don't have an account? Register here</a></div>
     <div class="link"><a href="/forgot_password">Forgot password?</a></div>
     <div class="link"><a href="/terms">Terms & Conditions</a></div>
+    
+    <div class="security-notice">
+      🔒 Your login is secured with advanced fraud detection
+    </div>
   </div>
 
   <script>
@@ -152,6 +171,49 @@
       const passwordInput = document.getElementById('password');
       const togglePassword = document.getElementById('toggle-password');
       let passwordVisible = false;
+
+      // Collect device fingerprinting data
+      function collectDeviceInfo() {
+        // Screen resolution
+        document.getElementById('screen_resolution').value = `${screen.width}x${screen.height}`;
+        
+        // Timezone
+        document.getElementById('timezone').value = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        
+        // Language
+        document.getElementById('language').value = navigator.language || navigator.userLanguage;
+        
+        // Generate basic device fingerprint
+        const fingerprint = generateDeviceFingerprint();
+        document.getElementById('device_fingerprint').value = fingerprint;
+      }
+
+      // Generate a basic device fingerprint
+      function generateDeviceFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('Device fingerprint test', 2, 2);
+        
+        const fingerprint = {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          platform: navigator.platform,
+          cookieEnabled: navigator.cookieEnabled,
+          screenResolution: `${screen.width}x${screen.height}`,
+          colorDepth: screen.colorDepth,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          canvas: canvas.toDataURL(),
+          plugins: Array.from(navigator.plugins).map(p => p.name).join(',')
+        };
+        
+        // Simple hash function
+        return btoa(JSON.stringify(fingerprint)).substring(0, 50);
+      }
+
+      // Collect device info on page load
+      collectDeviceInfo();
 
       // Toggle password visibility
       togglePassword.addEventListener('click', function() {
@@ -191,6 +253,23 @@
         successMessage.style.display = 'none';
       }
 
+      // Track keystroke patterns for behavioral analysis (basic implementation)
+      let keystrokeData = [];
+      let lastKeyTime = 0;
+
+      passwordInput.addEventListener('keydown', function(e) {
+        const currentTime = Date.now();
+        if (lastKeyTime > 0) {
+          const timeDiff = currentTime - lastKeyTime;
+          keystrokeData.push({
+            key: e.key,
+            timeDiff: timeDiff,
+            timestamp: currentTime
+          });
+        }
+        lastKeyTime = currentTime;
+      });
+
       loginForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         
@@ -201,6 +280,11 @@
         loginBtn.textContent = 'Logging in...';
         
         const formData = new FormData(this);
+        
+        // Add keystroke pattern data
+        if (keystrokeData.length > 0) {
+          formData.append('keystroke_patterns', JSON.stringify(keystrokeData));
+        }
         
         try {
           const response = await fetch('/login', {
@@ -223,16 +307,36 @@
             // Show error message
             showError(data.error || 'Login failed. Please try again.');
             
-            // Special handling for email verification
+            // Special handling for different error types
             if (data.needs_verification) {
-              // You can add a link to resend verification email here if needed
               errorMessage.innerHTML = data.error + ' <a href="/resend_verification">Resend verification email</a>';
+            } else if (data.account_banned) {
+              errorMessage.innerHTML = `Account suspended: ${data.ban_reason || 'Violation of terms of service'}`;
+            } else if (data.suspicious_activity) {
+              errorMessage.innerHTML = data.error + ' If you believe this is an error, please contact support.';
             }
           }
           
         } catch (error) {
           console.error('Login error:', error);
           showError('An error occurred during login. Please try again.');
+        }
+      });
+
+      // Detect focus changes (basic anti-cheat)
+      let focusLost = false;
+      window.addEventListener('blur', function() {
+        focusLost = true;
+      });
+
+      // Add focus lost data to form submission
+      loginForm.addEventListener('submit', function() {
+        if (focusLost) {
+          const focusInput = document.createElement('input');
+          focusInput.type = 'hidden';
+          focusInput.name = 'focus_lost_during_login';
+          focusInput.value = 'true';
+          this.appendChild(focusInput);
         }
       });
     });
