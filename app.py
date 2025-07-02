@@ -31,14 +31,6 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-
-import os
-import secrets
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-
 # Initialize Flask app ONCE
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
