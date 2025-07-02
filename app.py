@@ -21,7 +21,49 @@ import logging
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text
 from sqlalchemy import Date, DateTime
 from datetime import datetime
+from flask import Flask
+from models import db, Session, User, MouseMovement, KeyPress
 
+def create_app():
+    app = Flask(__name__)
+    
+    # Database configuration
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url and database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///app.db'
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    db.init_app(app)
+    return app
+
+def migrate_database():
+    app = create_app()
+    
+    with app.app_context():
+        try:
+            # Drop all tables and recreate (WARNING: This will delete all data!)
+            print("Dropping all tables...")
+            db.drop_all()
+            
+            print("Creating all tables with correct schema...")
+            db.create_all()
+            
+            print("Migration completed successfully!")
+            
+            # Verify tables exist
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
+            print(f"Created tables: {tables}")
+            
+        except Exception as e:
+            print(f"Migration failed: {e}")
+            raise
+
+if __name__ == '__main__':
+    migrate_database()
+    
 #==== Flask App Config ====
 
 app = Flask(__name__)
