@@ -21,6 +21,8 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, i
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy import String
+import hashlib
+from datetime import datetime, date
 
 
 # Initialize Flask app and database
@@ -994,12 +996,27 @@ def home():
 def register():
     if request.method == 'POST':
         try:
-            # Get form data with proper handling
+            # Get basic form data with proper handling
             email = request.form.get('email', '').strip().lower()
             password = request.form.get('password', '')
             confirm = request.form.get('confirm_password', '')
             role = request.form.get('account_type', '')
             username = request.form.get('username', '').strip()
+            
+            # Get additional user information
+            first_name = request.form.get('first_name', '').strip()
+            last_name = request.form.get('last_name', '').strip()
+            phone = request.form.get('phone', '').strip()
+            
+            # Get device fingerprint data
+            screen_resolution = request.form.get('screen_resolution', '')
+            timezone = request.form.get('timezone', '')
+            language = request.form.get('language', '')
+            canvas_fingerprint = request.form.get('canvas_fingerprint', '')
+            webgl_fingerprint = request.form.get('webgl_fingerprint', '')
+            audio_fingerprint = request.form.get('audio_fingerprint', '')
+            plugins_list = request.form.get('plugins_list', '')
+            fonts_list = request.form.get('fonts_list', '')
             
             # Auto-generate username from email if not provided
             if not username:
@@ -1030,21 +1047,116 @@ def register():
             if User.query.filter_by(username=username).first():
                 return jsonify({'error': 'Username already exists'}), 409
 
-            # Create user with username
+            # Get IP and User Agent info
+            client_ip = get_client_ip() if ENABLE_IP_TRACKING else None
+            user_agent = request.headers.get('User-Agent', '')
+            user_agent_hash = hashlib.sha256(user_agent.encode()).hexdigest()
+            
+            # Create device fingerprint hash
+            fingerprint_data = f"{canvas_fingerprint}{webgl_fingerprint}{audio_fingerprint}{screen_resolution}{timezone}"
+            device_fingerprint_hash = hashlib.sha256(fingerprint_data.encode()).hexdigest()
+            
+            # Create user with enhanced data
             hashed = generate_password_hash(password)
             user = User(
-                username=username,  # Add username field
-                email=email, 
-                password_hash=hashed, 
+                username=username,
+                email=email,
+                password_hash=hashed,
                 account_type=role,
-                last_ip=get_client_ip() if ENABLE_IP_TRACKING else None
+                first_name=first_name if first_name else None,
+                last_name=last_name if last_name else None,
+                phone=phone if phone else None,
+                last_ip=client_ip,
+                last_ip_address=client_ip,  # Your model has both fields
+                
+                # Device fingerprinting data
+                device_fingerprint=device_fingerprint_hash[:200],  # Truncate to fit field
+                screen_resolution=screen_resolution[:20] if screen_resolution else None,
+                time_zone=timezone[:50] if timezone else None,
+                user_agent_hash=user_agent_hash,
+                
+                # Initialize security fields
+                risk_level='low',
+                last_activity_date=date.today(),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
             )
             
             db.session.add(user)
+            db.session.flush()  # Get user.id before commit
+            
+            # Create detailed device fingerprint record
+            if any([canvas_fingerprint, webgl_fingerprint, audio_fingerprint]):
+                device_fp = DeviceFingerprint(
+                    user_id=user.id,
+                    fingerprint_hash=device_fingerprint_hash,
+                    screen_resolution=screen_resolution[:20] if screen_resolution else None,
+                    timezone=timezone[:50] if timezone else None,
+                    language=language[:10] if language else None,
+                    user_agent=user_agent,
+                    canvas_fingerprint=canvas_fingerprint[:100] if canvas_fingerprint else None,
+                    webgl_fingerprint=webgl_fingerprint[:100] if webgl_fingerprint else None,
+                    audio_fingerprint=audio_fingerprint[:100] if audio_fingerprint else None,
+                    plugins_list=plugins_list[:500] if plugins_list else None,  # Truncate to fit TEXT field
+                    fonts_list=fonts_list[:500] if fonts_list else None,
+                    first_seen=datetime.utcnow(),
+                    last_seen=datetime.utcnow(),
+                    times_seen=1,
+                    is_suspicious=False
+                )
+                db.session.add(device_fp)
+            
+            # Create initial geo location record if IP tracking is enabled
+            if client_ip and ENABLE_IP_TRACKING:
+                try:
+                    # You would integrate with a GeoIP service here
+                    # For now, just create a basic record
+                    geo_location = GeoLocation(
+                        user_id=user.id,
+                        ip_address=client_ip,
+                        timestamp=datetime.utcnow()
+                        # Add other geo fields when you have GeoIP integration
+                    )
+                    db.session.add(geo_location)
+                except Exception as e:
+                    print(f"⚠️ GeoLocation creation failed: {e}")
+            
+            # Log security event for new registration
+            security_event = SecurityEvent(
+                user_id=user.id,
+                event_type='user_registration',
+                severity='low',
+                description=f'New user registered: {username}',
+                ip_address=client_ip,
+                user_agent=user_agent,
+                timestamp=datetime.utcnow()
+            )
+            db.session.add(security_event)
+            
+            # Commit all changes
             db.session.commit()
 
-            # Log registration IP
+            # Log registration IP (your existing function)
             log_user_ip(user.id, "register")
+
+            # Check for potential fraud indicators
+            fraud_score = calculate_initial_fraud_score(user.id, device_fingerprint_hash, client_ip)
+            if fraud_score > 0.7:  # High fraud probability
+                # Update user risk level
+                user.risk_level = 'high'
+                user.ml_fraud_probability = fraud_score
+                
+                # Log high-risk registration
+                high_risk_event = SecurityEvent(
+                    user_id=user.id,
+                    event_type='high_risk_registration',
+                    severity='high',
+                    description=f'High fraud score detected: {fraud_score:.2f}',
+                    ip_address=client_ip,
+                    timestamp=datetime.utcnow()
+                )
+                db.session.add(high_risk_event)
+                db.session.commit()
 
             # Send verification email
             token = serializer.dumps(email, salt='email-confirm')
@@ -1077,7 +1189,8 @@ def register():
                     'success': True,
                     'redirect': url_for(success_route, email=email),
                     'account_type': user.account_type,
-                    'email_sent': email_sent
+                    'email_sent': email_sent,
+                    'risk_level': user.risk_level
                 })
 
             # If not auto-login, still redirect to success page
@@ -1090,7 +1203,8 @@ def register():
                 'success': True,
                 'redirect': url_for(success_route, email=email),
                 'account_type': user.account_type,
-                'email_sent': email_sent
+                'email_sent': email_sent,
+                'risk_level': user.risk_level
             })
             
         except Exception as e:
@@ -1100,6 +1214,50 @@ def register():
 
     return render_template('register.html')
 
+
+def calculate_initial_fraud_score(user_id, device_fingerprint, ip_address):
+    """
+    Calculate initial fraud score for new registrations
+    Returns a score between 0.0 (low risk) and 1.0 (high risk)
+    """
+    try:
+        score = 0.0
+        
+        # Check for duplicate device fingerprints
+        existing_fingerprints = DeviceFingerprint.query.filter_by(
+            fingerprint_hash=device_fingerprint
+        ).count()
+        
+        if existing_fingerprints > 0:
+            score += 0.3  # Same device used before
+            
+        if existing_fingerprints > 2:
+            score += 0.2  # Device used by multiple accounts
+        
+        # Check for duplicate IP addresses
+        if ip_address:
+            recent_registrations = User.query.filter(
+                User.last_ip == ip_address,
+                User.created_at >= datetime.utcnow() - timedelta(hours=24)
+            ).count()
+            
+            if recent_registrations > 1:
+                score += 0.2  # Multiple registrations from same IP
+                
+            if recent_registrations > 3:
+                score += 0.3  # Many registrations from same IP
+        
+        # Add more sophisticated checks here:
+        # - VPN/Proxy detection
+        # - Email domain reputation
+        # - Username patterns
+        # - Time-based patterns
+        
+        return min(score, 1.0)  # Cap at 1.0
+        
+    except Exception as e:
+        print(f"⚠️ Fraud score calculation failed: {e}")
+        return 0.0  # Default to low risk if calculation fails
 
 # Add these new routes for success pages
 @app.route('/registration-success/user')
