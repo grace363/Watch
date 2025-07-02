@@ -21,7 +21,7 @@
             border-radius: 15px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.1);
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
         }
         .register-header {
             text-align: center;
@@ -59,6 +59,13 @@
         .form-group select:focus {
             outline: none;
             border-color: #667eea;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        .form-row .form-group {
+            flex: 1;
         }
         .password-container {
             position: relative;
@@ -166,6 +173,32 @@
             font-size: 0.9em;
             font-weight: normal;
         }
+        .field-help {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 3px;
+        }
+        .security-info {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #495057;
+        }
+        .security-info h4 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 1em;
+        }
+        .security-info ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .security-info li {
+            margin-bottom: 4px;
+        }
     </style>
 </head>
 <body>
@@ -180,24 +213,47 @@
         <form id="registerForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             
+            <!-- Email and Username -->
             <div class="form-group">
                 <label for="email">Email Address</label>
                 <input type="email" id="email" name="email" required>
             </div>
 
             <div class="form-group">
-                <label for="name">Name <span class="optional-label">(optional)</span></label>
-                <input type="text" id="name" name="name" placeholder="Enter your name (optional)">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required minlength="3" maxlength="80" pattern="[a-zA-Z0-9_]+" title="Only letters, numbers, and underscores allowed">
+                <div class="field-help">3-80 characters, letters, numbers, and underscores only</div>
             </div>
 
+            <!-- Name Fields -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="first_name">First Name <span class="optional-label">(optional)</span></label>
+                    <input type="text" id="first_name" name="first_name" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="last_name">Last Name <span class="optional-label">(optional)</span></label>
+                    <input type="text" id="last_name" name="last_name" maxlength="50">
+                </div>
+            </div>
+
+            <!-- Phone (Optional) -->
+            <div class="form-group">
+                <label for="phone">Phone Number <span class="optional-label">(optional)</span></label>
+                <input type="tel" id="phone" name="phone" maxlength="20" placeholder="+1234567890">
+                <div class="field-help">International format recommended (e.g., +1234567890)</div>
+            </div>
+
+            <!-- Password Fields -->
             <div class="form-group">
                 <label for="password">Password</label>
                 <div class="password-container">
-                    <input type="password" id="password" name="password" required minlength="6">
+                    <input type="password" id="password" name="password" required minlength="8" maxlength="200">
                     <button type="button" class="password-toggle" onclick="togglePassword('password')">
                         👁️
                     </button>
                 </div>
+                <div class="field-help">Minimum 8 characters</div>
             </div>
 
             <div class="form-group">
@@ -210,6 +266,7 @@
                 </div>
             </div>
 
+            <!-- Account Type -->
             <div class="form-group">
                 <label for="account_type">Account Type</label>
                 <select id="account_type" name="account_type" required>
@@ -219,10 +276,30 @@
                 </select>
             </div>
 
+            <!-- Security Information -->
+            <div class="security-info">
+                <h4>🔒 Security & Anti-Cheat Notice</h4>
+                <ul>
+                    <li>We collect device fingerprints to prevent fraud</li>
+                    <li>Your IP address and location are logged for security</li>
+                    <li>Mouse movements and keystrokes may be analyzed</li>
+                    <li>Multiple accounts from the same device are not allowed</li>
+                    <li>VPN/Proxy usage may trigger additional verification</li>
+                </ul>
+            </div>
+
+            <!-- Terms and Conditions -->
             <div class="checkbox-group">
                 <input type="checkbox" id="agree_terms" name="agree_terms" required>
                 <label for="agree_terms">
-                    I agree to the <a href="terms.html" target="_blank">Terms and Conditions</a>
+                    I agree to the <a href="/terms" target="_blank">Terms and Conditions</a> and <a href="/privacy" target="_blank">Privacy Policy</a>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="agree_security" name="agree_security" required>
+                <label for="agree_security">
+                    I understand and consent to the security measures and data collection described above
                 </label>
             </div>
 
@@ -231,7 +308,7 @@
             </button>
 
             <div class="loading" id="loadingMessage">
-                Creating your account...
+                Creating your account and setting up security...
             </div>
         </form>
 
@@ -241,6 +318,95 @@
     </div>
 
     <script>
+        // Device fingerprinting data collection
+        let deviceFingerprint = {};
+        
+        function collectDeviceFingerprint() {
+            deviceFingerprint = {
+                screen_resolution: `${screen.width}x${screen.height}`,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                language: navigator.language,
+                user_agent: navigator.userAgent,
+                canvas_fingerprint: getCanvasFingerprint(),
+                webgl_fingerprint: getWebGLFingerprint(),
+                audio_fingerprint: getAudioFingerprint(),
+                plugins_list: getPluginsList(),
+                fonts_list: getFontsList()
+            };
+        }
+
+        function getCanvasFingerprint() {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = 'top';
+                ctx.font = '14px Arial';
+                ctx.fillText('Device fingerprinting test 123', 2, 2);
+                return canvas.toDataURL().slice(-50); // Last 50 chars for brevity
+            } catch (e) {
+                return 'unavailable';
+            }
+        }
+
+        function getWebGLFingerprint() {
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (!gl) return 'unavailable';
+                
+                const renderer = gl.getParameter(gl.RENDERER);
+                const vendor = gl.getParameter(gl.VENDOR);
+                return `${vendor}-${renderer}`.slice(0, 100);
+            } catch (e) {
+                return 'unavailable';
+            }
+        }
+
+        function getAudioFingerprint() {
+            try {
+                const context = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = context.createAnalyser();
+                return context.sampleRate.toString() + analyser.fftSize.toString();
+            } catch (e) {
+                return 'unavailable';
+            }
+        }
+
+        function getPluginsList() {
+            const plugins = [];
+            for (let i = 0; i < navigator.plugins.length; i++) {
+                plugins.push(navigator.plugins[i].name);
+            }
+            return plugins.join(',').slice(0, 500); // First 500 chars
+        }
+
+        function getFontsList() {
+            // This is a simplified font detection - in production you'd use more sophisticated methods
+            const testFonts = ['Arial', 'Times', 'Courier', 'Helvetica', 'Georgia', 'Verdana', 'Comic Sans MS'];
+            const availableFonts = [];
+            
+            testFonts.forEach(font => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.font = `12px ${font}, monospace`;
+                ctx.fillText('test', 0, 0);
+                const width1 = ctx.measureText('test').width;
+                
+                ctx.font = '12px monospace';
+                ctx.fillText('test', 0, 0);
+                const width2 = ctx.measureText('test').width;
+                
+                if (width1 !== width2) {
+                    availableFonts.push(font);
+                }
+            });
+            
+            return availableFonts.join(',');
+        }
+
+        // Collect device fingerprint on page load
+        window.addEventListener('load', collectDeviceFingerprint);
+
         function togglePassword(fieldId) {
             const field = document.getElementById(fieldId);
             const button = field.nextElementSibling;
@@ -261,6 +427,11 @@
             const submitBtn = document.getElementById('registerBtn');
             const loadingMsg = document.getElementById('loadingMessage');
             const alertContainer = document.getElementById('alertContainer');
+            
+            // Add device fingerprint data
+            Object.keys(deviceFingerprint).forEach(key => {
+                formData.append(key, deviceFingerprint[key]);
+            });
             
             // Clear previous alerts
             alertContainer.innerHTML = '';
@@ -325,6 +496,26 @@
                 this.setCustomValidity('Passwords do not match');
             } else {
                 this.setCustomValidity('');
+            }
+        });
+
+        // Username validation
+        document.getElementById('username').addEventListener('input', function() {
+            const username = this.value;
+            const regex = /^[a-zA-Z0-9_]+$/;
+            
+            if (!regex.test(username) && username.length > 0) {
+                this.setCustomValidity('Username can only contain letters, numbers, and underscores');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+
+        // Phone number formatting
+        document.getElementById('phone').addEventListener('input', function() {
+            let phone = this.value.replace(/\D/g, '');
+            if (phone.length > 0 && !phone.startsWith('+')) {
+                this.value = '+' + phone;
             }
         });
     </script>
