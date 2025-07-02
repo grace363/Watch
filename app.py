@@ -30,12 +30,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from models import (
-    db, User, IPLog, WithdrawalRequest, Video, WatchSession, 
-    DailySession, Withdrawal, Earning, DeviceFingerprint, 
-    SecurityEvent, MouseMovement, KeystrokePattern, GeoLocation, 
-    RiskScore, HoneypotInteraction
-)
 
 # Initialize Flask app and database
 app = Flask(__name__)
