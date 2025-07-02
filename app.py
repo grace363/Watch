@@ -16,31 +16,25 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 from werkzeug.utils import secure_filename
 from pathlib import Path
-from flask import session, jsonify, request 
 import logging 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text
-from sqlalchemy import Date, DateTime
-from datetime import datetime
-from flask import Flask
-from models import db, Session, User, MouseMovement, KeyPress
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, inspect
 
-def create_app():
-    app = Flask(__name__)
-    
-    # Database configuration
-    database_url = os.environ.get('DATABASE_URL')
-    if database_url and database_url.startswith('postgres://'):
-        database_url = database_url.replace('postgres://', 'postgresql://', 1)
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///app.db'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
-    db.init_app(app)
-    return app
+# Initialize Flask app and database
+app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
+
+# Database configuration
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url or 'sqlite:///watch_and_earn.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
+
+# Initialize database
+db = SQLAlchemy(app)
 
 def migrate_database():
-    app = create_app()
-    
     with app.app_context():
         try:
             # Drop all tables and recreate (WARNING: This will delete all data!)
@@ -53,21 +47,13 @@ def migrate_database():
             print("Migration completed successfully!")
             
             # Verify tables exist
-            inspector = db.inspect(db.engine)
+            inspector = inspect(db.engine)
             tables = inspector.get_table_names()
             print(f"Created tables: {tables}")
             
         except Exception as e:
             print(f"Migration failed: {e}")
             raise
-
-if __name__ == '__main__':
-    migrate_database()
-    
-#==== Flask App Config ====
-
-app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 #==== CSRF Protection ====
 # Check if CSRF protection should be enabled (default: True)
@@ -79,11 +65,6 @@ if CSRF_ENABLED:
 else:
     csrf = None
     print("⚠️ CSRF Protection disabled")
-
-#==== Database Configuration ====
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///watch_and_earn.db')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
-db = SQLAlchemy(app)
 
 #==== Environment Config ====
 
@@ -451,11 +432,8 @@ class SecurityEvent(db.Model):
     description = db.Column(db.Text)
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.Text)
-    session_token = db.Column(db.String(100))
-    additional_data = db.Column(db.JSON)  # Store additional context as JSON
+    session_token = db.Column(db.String(100))  # Fixed: Complete the line
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    resolved = db.Column(db.Boolean, default=False)
-    admin_notes = db.Column(db.Text)
     
     user = db.relationship('User', backref=db.backref('security_events', lazy=True))
 
@@ -2947,10 +2925,12 @@ def terms():
 
 #==== Run App ====
 
+
 if __name__ == '__main__':
-    # Initialize database on startup
-    init_db()
+    # Run migration first, then start the app
+    migrate_database()
     app.run(debug=True)
+
 else:
     # For production deployment (like Render)
     # Initialize database when app is imported
