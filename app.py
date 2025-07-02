@@ -158,51 +158,396 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 
 #==== DB Models ====
 
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime, timedelta
+from sqlalchemy import String, Text, JSON, Index
+import json
+
+db = SQLAlchemy()
+
 class User(db.Model): 
-    id = db.Column(db.Integer, primary_key=True) 
-    email = db.Column(db.String(120), unique=True) 
-    password_hash = db.Column(db.String(200)) 
-    account_type = db.Column(db.String(10)) 
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False) 
+    password_hash = db.Column(db.String(200), nullable=False) 
+    account_type = db.Column(db.String(10), nullable=False) 
     is_verified = db.Column(db.Boolean, default=False) 
     last_login_date = db.Column(db.DateTime) 
     total_watch_minutes = db.Column(db.Integer, default=0) 
     daily_bonus_given = db.Column(db.Boolean, default=False) 
     balance_usd = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_ip = db.Column(db.String(45))  # Store last known IP (IPv6 can be up to 45 chars)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_ip = db.Column(db.String(45))
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))
+    last_bonus_date = db.Column(db.Date)
+    daily_online_time = db.Column(db.Integer, default=0)
+        
+    # Enhanced Anti-cheat fields
+    videos_watched_today = db.Column(db.Integer, default=0)
+    last_video_date = db.Column(db.Date)
+    cheat_violations = db.Column(db.Integer, default=0)
+    is_banned = db.Column(db.Boolean, default=False)
+    ban_reason = db.Column(db.String(200))
+    ban_expires_at = db.Column(db.DateTime)  # Temporary bans
+    session_start_time = db.Column(db.DateTime)
+    last_heartbeat = db.Column(db.DateTime)
+    last_bonus_claim = db.Column(db.DateTime)
+    last_activity_date = db.Column(db.Date, default=datetime.utcnow().date())
+    current_session_start = db.Column(db.DateTime)
+    total_daily_bonuses = db.Column(db.Integer, default=0)
+    consecutive_days = db.Column(db.Integer, default=0)
     
-    withdrawals = db.relationship('Withdrawal', backref='user', lazy=True)
-    earnings = db.relationship('Earning', backref='user', lazy=True)
+    # Advanced Session tracking 
+    session_token = db.Column(db.String(64))
+    active_sessions_count = db.Column(db.Integer, default=0)  # Prevent multiple sessions
+    max_concurrent_sessions = db.Column(db.Integer, default=1)
+    
+    # Behavioral Anti-cheat
+    back_button_pressed = db.Column(db.Boolean, default=False)
+    focus_lost_count = db.Column(db.Integer, default=0)
+    tab_switch_count = db.Column(db.Integer, default=0)  # Track tab switching
+    window_blur_count = db.Column(db.Integer, default=0)  # Track window focus loss
+    fast_forward_attempts = db.Column(db.Integer, default=0)  # Video manipulation attempts
+    
+    # Watch Pattern Analysis
+    total_watch_time = db.Column(db.Integer, default=0)
+    average_watch_completion = db.Column(db.Float, default=0.0)  # % of videos completed
+    watch_streak = db.Column(db.Integer, default=0)  # Consecutive videos watched
+    unusual_watch_patterns = db.Column(db.Integer, default=0)  # Flagged patterns
+    
+    # Device/Browser Fingerprinting
+    device_fingerprint = db.Column(db.String(200))
+    browser_fingerprint = db.Column(db.String(200))  # Separate browser fingerprint
+    time_zone = db.Column(db.String(50))
+    screen_resolution = db.Column(db.String(20))
+    user_agent_hash = db.Column(db.String(64))
+    canvas_fingerprint = db.Column(db.String(100))
+    webgl_fingerprint = db.Column(db.String(100))
+    audio_fingerprint = db.Column(db.String(100))
+    
+    # AI/ML Fraud Detection
+    click_pattern_score = db.Column(db.Float, default=0.0)
+    watch_velocity_score = db.Column(db.Float, default=0.0)
+    behavioral_score = db.Column(db.Float, default=0.0)
+    ml_fraud_probability = db.Column(db.Float, default=0.0)
+    feature_vector_hash = db.Column(db.String(64))
+    
+    # Network/Proxy Detection
+    proxy_detected = db.Column(db.Boolean, default=False)
+    vpn_detected = db.Column(db.Boolean, default=False)
+    tor_detected = db.Column(db.Boolean, default=False)
+    datacenter_ip = db.Column(db.Boolean, default=False)
+    
+    # Automation Detection
+    automation_detected = db.Column(db.Boolean, default=False)
+    bot_score = db.Column(db.Float, default=0.0)  # 0.0 = human, 1.0 = bot
+    headless_browser_detected = db.Column(db.Boolean, default=False)
+    selenium_detected = db.Column(db.Boolean, default=False)
+    puppeteer_detected = db.Column(db.Boolean, default=False)
+    
+    # Risk Assessment
+    suspicious_activity_count = db.Column(db.Integer, default=0)
+    risk_level = db.Column(db.String(10), default='low')  # low, medium, high, critical
+    trust_score = db.Column(db.Float, default=100.0)  # 0-100, higher = more trusted
+    last_risk_assessment = db.Column(db.DateTime)
+    
+    # Consistency Tracking
+    browser_changes_count = db.Column(db.Integer, default=0)
+    device_changes_count = db.Column(db.Integer, default=0)
+    location_changes_count = db.Column(db.Integer, default=0)
+    ip_changes_count = db.Column(db.Integer, default=0)
+    timezone_changes_count = db.Column(db.Integer, default=0)
+    
+    # Speed/Timing Analysis
+    average_reaction_time = db.Column(db.Float, default=0.0)  # Click reaction times
+    typing_speed_wpm = db.Column(db.Integer, default=0)  # Words per minute
+    mouse_movement_entropy = db.Column(db.Float, default=0.0)  # Randomness of mouse movements
+    
+    # Earning Protection
+    daily_earning_limit = db.Column(db.Float, default=5.0)  # Max daily earnings
+    current_daily_earnings = db.Column(db.Float, default=0.0)
+    last_earnings_reset = db.Column(db.Date, default=datetime.utcnow().date())
+    weekly_earning_limit = db.Column(db.Float, default=25.0)
+    current_weekly_earnings = db.Column(db.Float, default=0.0)
+    
+    # Account Flags
+    manual_review_required = db.Column(db.Boolean, default=False)
+    kyc_required = db.Column(db.Boolean, default=False)
+    withdrawal_restricted = db.Column(db.Boolean, default=False)
+    earning_restricted = db.Column(db.Boolean, default=False)
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
 
 
-class IPLog(db.Model):
-    """Track user IP addresses and login history"""
+class AntiCheatRule(db.Model):
+    """Define anti-cheat rules and thresholds"""
+    id = db.Column(db.Integer, primary_key=True)
+    rule_name = db.Column(db.String(100), unique=True, nullable=False)
+    rule_type = db.Column(db.String(50), nullable=False)  # 'behavioral', 'technical', 'pattern'
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+    severity = db.Column(db.String(20), default='medium')  # low, medium, high, critical
+    threshold_value = db.Column(db.Float)  # Numeric threshold
+    threshold_timeframe = db.Column(db.Integer)  # Minutes/hours for time-based rules
+    action_type = db.Column(db.String(20), default='flag')  # flag, warn, restrict, ban
+    auto_action = db.Column(db.Boolean, default=False)  # Auto-execute action
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class WatchSession(db.Model):
+    __tablename__ = 'watch_session'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    ip_address = db.Column(db.String(45), nullable=False)  # IPv6 support
-    user_agent = db.Column(db.Text)  # Browser/device info
-    action = db.Column(db.String(50), default='login')  # login, register, etc.
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    session_token = db.Column(db.String(100), unique=True, nullable=False)
+    
+    # Timing Data
+    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    end_time = db.Column(db.DateTime)
+    watch_duration = db.Column(db.Integer, default=0)  # seconds actually watched
+    video_length = db.Column(db.Integer)  # total video length
+    completion_percentage = db.Column(db.Float, default=0.0)
+    
+    # Behavioral Monitoring
+    focus_lost_count = db.Column(db.Integer, default=0)
+    tab_switches = db.Column(db.Integer, default=0)
+    window_blur_events = db.Column(db.Integer, default=0)
+    back_button_pressed = db.Column(db.Boolean, default=False)
+    fast_forward_attempts = db.Column(db.Integer, default=0)
+    rewind_attempts = db.Column(db.Integer, default=0)
+    pause_count = db.Column(db.Integer, default=0)
+    volume_changes = db.Column(db.Integer, default=0)
+    fullscreen_toggles = db.Column(db.Integer, default=0)
+    
+    # Interaction Tracking
+    mouse_movements = db.Column(db.Integer, default=0)
+    mouse_clicks = db.Column(db.Integer, default=0)
+    keyboard_events = db.Column(db.Integer, default=0)
+    scroll_events = db.Column(db.Integer, default=0)
+    
+    # Quality Metrics
+    video_buffer_events = db.Column(db.Integer, default=0)
+    video_errors = db.Column(db.Integer, default=0)
+    network_interruptions = db.Column(db.Integer, default=0)
+    
+    # Anti-Cheat Flags
+    reward_given = db.Column(db.Boolean, default=False)
+    cheating_detected = db.Column(db.Boolean, default=False)
+    cheat_reason = db.Column(db.String(500))
+    is_completed = db.Column(db.Boolean, default=False)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    manual_review_required = db.Column(db.Boolean, default=False)
+    
+    # Technical Data
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    browser_fingerprint = db.Column(db.String(200))
+    screen_resolution = db.Column(db.String(20))
+    connection_speed = db.Column(db.String(20))  # Estimated connection speed
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
+    video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
+
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_user_date', 'user_id', 'created_at'),
+        Index('idx_session_token', 'session_token'),
+        Index('idx_suspicious', 'is_suspicious', 'cheating_detected'),
+    )
+
+
+class MouseMovementPattern(db.Model):
+    """Track mouse movement patterns for bot detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    # Movement Data (stored as JSON)
+    movement_data = db.Column(JSON)  # Array of {x, y, timestamp, event_type}
+    total_distance = db.Column(db.Float, default=0.0)
+    average_speed = db.Column(db.Float, default=0.0)
+    movement_entropy = db.Column(db.Float, default=0.0)  # Randomness measure
+    
+    # Pattern Analysis
+    straight_line_ratio = db.Column(db.Float, default=0.0)  # How often moves in straight lines
+    pause_frequency = db.Column(db.Float, default=0.0)  # How often mouse pauses
+    acceleration_variance = db.Column(db.Float, default=0.0)  # Speed change patterns
+    
+    # Bot Detection Scores
+    human_likelihood = db.Column(db.Float, default=0.5)  # 0.0 = bot, 1.0 = human
+    pattern_regularity = db.Column(db.Float, default=0.0)  # Too regular = bot
+    
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationship
-    user = db.relationship('User', backref=db.backref('ip_logs', lazy=True))
+    session = db.relationship('WatchSession', backref=db.backref('mouse_patterns', lazy=True))
+    user = db.relationship('User', backref=db.backref('mouse_patterns', lazy=True))
 
-class WithdrawalRequest(db.Model): 
-    id = db.Column(db.Integer, primary_key=True) 
-    user_id = db.Column(db.Integer) 
-    amount = db.Column(db.Float) 
-    status = db.Column(db.String(20)) 
+
+class BiometricData(db.Model):
+    """Store behavioral biometric data"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
+    
+    # Typing Patterns
+    keystroke_dynamics = db.Column(JSON)  # Timing between keystrokes
+    typing_rhythm_score = db.Column(db.Float, default=0.0)
+    
+    # Click Patterns
+    click_timing_data = db.Column(JSON)  # Time between clicks
+    double_click_timing = db.Column(db.Float, default=0.0)
+    click_pressure_variance = db.Column(db.Float, default=0.0)
+    
+    # Scroll Patterns
+    scroll_velocity_pattern = db.Column(JSON)
+    scroll_acceleration_pattern = db.Column(JSON)
+    
+    # Touch Patterns (for mobile)
+    touch_pressure_data = db.Column(JSON)
+    swipe_velocity_data = db.Column(JSON)
+    
+    # Device Orientation (mobile)
+    device_orientation_changes = db.Column(db.Integer, default=0)
+    accelerometer_data = db.Column(JSON)
+    
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('biometric_data', lazy=True))
 
+
+class NetworkAnalysis(db.Model):
+    """Analyze network patterns for fraud detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=False)
+    
+    # Geolocation Data
+    country = db.Column(db.String(2))  # ISO country code
+    region = db.Column(db.String(50))
+    city = db.Column(db.String(50))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    timezone = db.Column(db.String(50))
+    
+    # ISP Information
+    isp = db.Column(db.String(100))
+    organization = db.Column(db.String(100))
+    as_number = db.Column(db.String(20))  # Autonomous System Number
+    
+    # Risk Indicators
+    is_proxy = db.Column(db.Boolean, default=False)
+    is_vpn = db.Column(db.Boolean, default=False)
+    is_tor = db.Column(db.Boolean, default=False)
+    is_datacenter = db.Column(db.Boolean, default=False)
+    is_mobile = db.Column(db.Boolean, default=False)
+    is_hosting = db.Column(db.Boolean, default=False)
+    
+    # Connection Analysis
+    connection_type = db.Column(db.String(20))  # broadband, mobile, satellite
+    estimated_speed = db.Column(db.String(20))
+    rtt_ms = db.Column(db.Integer)  # Round trip time
+    
+    # Reputation Scores
+    ip_reputation_score = db.Column(db.Float, default=0.0)  # Third-party reputation
+    threat_level = db.Column(db.String(20), default='low')
+    
+    # Usage Patterns
+    users_from_ip = db.Column(db.Integer, default=1)  # How many users from this IP
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('network_analyses', lazy=True))
+
+
+class FraudDetectionLog(db.Model):
+    """Log all fraud detection events and decisions"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
+    
+    # Detection Info
+    detection_type = db.Column(db.String(50), nullable=False)  # mouse_bot, proxy, pattern, etc.
+    rule_triggered = db.Column(db.String(100))  # Which rule was triggered
+    confidence_score = db.Column(db.Float, default=0.0)  # 0.0-1.0 confidence
+    risk_score = db.Column(db.Float, default=0.0)  # Calculated risk score
+    
+    # Evidence Data
+    evidence_data = db.Column(JSON)  # Store detection evidence
+    raw_data = db.Column(JSON)  # Raw data that triggered detection
+    
+    # Actions Taken
+    action_taken = db.Column(db.String(50))  # flag, warn, restrict, ban, none
+    automated_action = db.Column(db.Boolean, default=True)
+    manual_review_required = db.Column(db.Boolean, default=False)
+    
+    # Review Info
+    reviewed_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime)
+    review_decision = db.Column(db.String(20))  # confirmed, false_positive, inconclusive
+    review_notes = db.Column(db.Text)
+    
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('fraud_logs', lazy=True))
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by], backref=db.backref('reviewed_cases', lazy=True))
+    session = db.relationship('WatchSession', backref=db.backref('fraud_logs', lazy=True))
+
+
+class WhitelistedIP(db.Model):
+    """IPs that are whitelisted from certain checks"""
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), unique=True, nullable=False)
+    ip_range = db.Column(db.String(50))  # CIDR notation for ranges
+    reason = db.Column(db.String(200))
+    added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime)  # Optional expiration
+    is_active = db.Column(db.Boolean, default=True)
+    
+    added_by_user = db.relationship('User', backref=db.backref('whitelisted_ips', lazy=True))
+
+
+class BlacklistedIP(db.Model):
+    """IPs that are blocked"""
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), unique=True, nullable=False)
+    ip_range = db.Column(db.String(50))  # CIDR notation for ranges
+    reason = db.Column(db.String(200))
+    blocked_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime)  # Optional expiration
+    is_active = db.Column(db.Boolean, default=True)
+    
+    blocked_by_user = db.relationship('User', backref=db.backref('blacklisted_ips', lazy=True))
+
+
+# Keep your existing models with anti-cheat enhancements
 class Video(db.Model): 
     id = db.Column(db.Integer, primary_key=True) 
-    title = db.Column(db.String(200)) 
-    video_url = db.Column(db.String(500)) 
-    added_by = db.Column(db.Integer) 
+    title = db.Column(db.String(200), nullable=False) 
+    video_url = db.Column(db.String(500), nullable=False) 
+    added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+    min_watch_time = db.Column(db.Integer, default=30)  # seconds
+    reward_amount = db.Column(db.Float, default=0.01)
+    
+    # Anti-cheat for videos
+    max_daily_views_per_user = db.Column(db.Integer, default=5)
+    requires_interaction = db.Column(db.Boolean, default=True)  # Require mouse/keyboard activity
+    skip_detection_enabled = db.Column(db.Boolean, default=True)
+    quality_threshold = db.Column(db.Float, default=0.8)  # Minimum completion quality
+    
+    uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
 
 #==== Util: Send Email ====
 
