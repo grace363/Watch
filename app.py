@@ -34,10 +34,18 @@ from flask_limiter.util import get_remote_address
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
+import os
+import secrets
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+# Initialize Flask app ONCE
 app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///watch_and_earn.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Initialize SQLAlchemy with the app
 db = SQLAlchemy(app)
 
 # Define your models
@@ -48,10 +56,6 @@ class User(db.Model):
 # Create tables
 with app.app_context():
     db.create_all()
-
-# Initialize Flask app and database
-app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 # Database configuration
 database_url = os.environ.get('DATABASE_URL')
