@@ -2,7 +2,7 @@ import os
 import json 
 import base64 
 import secrets 
-from datetime import datetime, timedelta 
+from datetime import datetime, timedelta, date
 from flask import Flask, request, session, jsonify, render_template, redirect, url_for, flash 
 from flask_sqlalchemy import SQLAlchemy 
 from flask_limiter import Limiter 
@@ -16,11 +16,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
 from werkzeug.utils import secure_filename
 from pathlib import Path
-from flask import session, jsonify, request 
 import logging 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text
-from sqlalchemy import Date, DateTime
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, JSON
 import math
 
 
