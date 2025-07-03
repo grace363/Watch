@@ -226,7 +226,19 @@ class User(db.Model):
     phone = db.Column(db.String(20))
     last_bonus_date = db.Column(db.Date)
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
-        
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(50), nullable=False)  # 'daily_bonus', 'video_watch', etc.
+    description = db.Column(db.String(200))
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref='earnings')
+
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
     last_video_date = db.Column(db.Date)
@@ -2362,24 +2374,6 @@ def reset_daily_data_if_needed(user):
         return user
     except:
         return user
-
-# You'll also need an Earning model if you don't have one:
-class Earning(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    source = db.Column(db.String(50), nullable=False)  # 'daily_bonus', 'video_watch', etc.
-    description = db.Column(db.String(200))
-    ip_address = db.Column(db.String(45))
-    user_agent = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship
-    user = db.relationship('User', backref='earnings')
-
-# Constants you'll need to define:
-DAILY_REWARD = 0.50  # $0.50 base daily reward
-DAILY_ONLINE_TIME = 3600  # 1 hour in seconds
 
 # Add these routes to your existing app.py file
 
