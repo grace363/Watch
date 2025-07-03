@@ -422,7 +422,8 @@ class SecurityEvent(db.Model):
 class MouseMovement(db.Model):
     """Track mouse movements for bot detection"""
     id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=False)
+    # FIXED: Changed from 'watch_session.id' to 'watch_sessions.id' to match the table name
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_sessions.id'), nullable=False)
     timestamp = db.Column(db.Float, nullable=False)  # Milliseconds since session start
     x_coordinate = db.Column(db.Integer)
     y_coordinate = db.Column(db.Integer)
