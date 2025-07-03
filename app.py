@@ -1542,7 +1542,7 @@ def utility_processor():
     )
 
  @app.route('/heartbeat', methods=['POST'])
-def heartbeat():
+ def heartbeat():
     """Track user online time for daily bonus eligibility"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
