@@ -22,6 +22,7 @@ import math
 from sqlalchemy import func
 import hashlib
 import time
+from functools import wraps
 
 
 DAILY_ONLINE_TIME = 60  # seconds
