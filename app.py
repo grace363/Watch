@@ -1,686 +1,866 @@
-from django.db import models
-from django.contrib.auth.models import AbstractUser
-from django.core.validators import MinValueValidator, MaxValueValidator
-from django.utils import timezone
-from django.core.exceptions import ValidationError
-from decimal import Decimal
+import os 
+import json 
+import base64 
+import secrets 
+from datetime import datetime, timedelta 
+from flask import Flask, request, session, jsonify, render_template, redirect, url_for, flash 
+from flask_sqlalchemy import SQLAlchemy 
+from flask_limiter import Limiter 
+from flask_limiter.util import get_remote_address 
+from flask_mail import Mail, Message 
+from flask_wtf.csrf import CSRFProtect
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature 
+import firebase_admin 
+from firebase_admin import credentials, firestore 
+from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
-import json
+from werkzeug.utils import secure_filename
+from pathlib import Path
+from flask import session, jsonify, request 
+import logging 
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text
+from sqlalchemy import Date, DateTime
+from datetime import datetime
+import math
 
 
-class User(AbstractUser):
-    """Enhanced user model for watch and earn app with anti-cheat measures"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    
-    # Basic Info
-    phone_number = models.CharField(max_length=15, blank=True, null=True)
-    first_name = models.CharField(max_length=50, blank=True)
-    last_name = models.CharField(max_length=50, blank=True)
-    
-    # Financial Fields
-    total_earnings = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    available_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    pending_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    lifetime_earnings = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    
-    # Referral System
-    referral_code = models.CharField(max_length=10, unique=True, blank=True)
-    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
-    referral_earnings = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    total_referrals = models.PositiveIntegerField(default=0)
-    
-    # Activity Tracking
-    is_verified = models.BooleanField(default=False)
-    is_active_today = models.BooleanField(default=False)
-    last_activity = models.DateTimeField(auto_now=True)
-    last_login_date = models.DateTimeField(null=True, blank=True)
-    session_start_time = models.DateTimeField(null=True, blank=True)
-    current_session_start = models.DateTimeField(null=True, blank=True)
-    last_heartbeat = models.DateTimeField(null=True, blank=True)
-    
-    # Daily Stats
-    videos_watched_today = models.PositiveIntegerField(default=0)
-    daily_online_time = models.PositiveIntegerField(default=0, help_text="Seconds online today")
-    last_video_date = models.DateField(null=True, blank=True)
-    last_activity_date = models.DateField(default=timezone.now)
-    last_bonus_date = models.DateField(null=True, blank=True)
-    last_bonus_claim = models.DateTimeField(null=True, blank=True)
-    consecutive_days = models.PositiveIntegerField(default=0)
-    total_daily_bonuses = models.PositiveIntegerField(default=0)
-    
-    # Anti-Cheat System
-    cheat_violations = models.PositiveIntegerField(default=0)
-    is_banned = models.BooleanField(default=False)
-    ban_reason = models.TextField(blank=True)
-    ban_expires_at = models.DateTimeField(null=True, blank=True)
-    trust_score = models.DecimalField(max_digits=5, decimal_places=2, default=100.00)
-    
-    # Session Management
-    session_token = models.CharField(max_length=64, blank=True)
-    active_sessions_count = models.PositiveIntegerField(default=0)
-    max_concurrent_sessions = models.PositiveIntegerField(default=1)
-    
-    # Security
-    last_ip = models.GenericIPAddressField(null=True, blank=True)
-    failed_login_attempts = models.PositiveIntegerField(default=0)
-    account_locked_until = models.DateTimeField(null=True, blank=True)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+#==== Flask App Config ====
 
-    def __str__(self):
-        return self.username
+app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
-    def save(self, *args, **kwargs):
-        if not self.referral_code:
-            self.referral_code = str(uuid.uuid4())[:8].upper()
-        super().save(*args, **kwargs)
+#==== CSRF Protection ====
+# Check if CSRF protection should be enabled (default: True)
+CSRF_ENABLED = os.environ.get('CSRF_ENABLED', 'true').lower() == 'true'
 
-    def is_account_locked(self):
-        """Check if account is temporarily locked"""
-        if self.account_locked_until and self.account_locked_until > timezone.now():
-            return True
+if CSRF_ENABLED:
+    csrf = CSRFProtect(app)
+    print("✅ CSRF Protection enabled")
+else:
+    csrf = None
+    print("⚠️ CSRF Protection disabled")
+
+#==== Database Configuration ====
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///watch_and_earn.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
+db = SQLAlchemy(app)
+
+#==== Environment Config ====
+
+CSRF_TOKEN_LENGTH = int(os.environ.get('CSRF_TOKEN_LENGTH', 16)) 
+LOGIN_RATE_LIMIT = os.environ.get('LOGIN_RATE_LIMIT', '20 per minute') 
+DAILY_REWARD = float(os.environ.get('DAILY_LOGIN_REWARD', 0.05)) 
+MIN_WITHDRAW_AMOUNT = float(os.environ.get('MIN_WITHDRAW_AMOUNT', 150)) 
+AUTO_LOGIN_AFTER_REGISTRATION = os.environ.get('AUTO_LOGIN_AFTER_REGISTRATION', 'false').lower() == 'true' 
+ENABLE_REWARDS = os.environ.get('ENABLE_REWARDS', 'true').lower() == 'true' 
+MAINTENANCE_MODE = os.environ.get('MAINTENANCE_MODE', 'false').lower() == 'true' 
+PASSWORD_MIN_LENGTH = int(os.environ.get('PASSWORD_MIN_LENGTH', 6)) 
+PASSWORD_CONFIRMATION_REQUIRED = os.environ.get('PASSWORD_CONFIRMATION_REQUIRED', 'true').lower() == 'true' 
+ALLOWED_ROLES = os.environ.get('ALLOWED_ROLES', 'User,YouTuber').split(',')
+
+# Watch & Earn Restrictive Rules
+VIDEO_WATCH_TIME = int(os.environ.get('VIDEO_WATCH_TIME', 30))  # Seconds to watch for reward
+VIDEO_REWARD_AMOUNT = float(os.environ.get('VIDEO_REWARD_AMOUNT', 0.01))  # Reward per video
+DAILY_ONLINE_TIME = int(os.environ.get('DAILY_ONLINE_TIME', 60))  # Seconds to stay online for daily reward
+MAX_VIDEOS_PER_DAY = int(os.environ.get('MAX_VIDEOS_PER_DAY', 50))  # Max videos that can earn rewards per day
+ANTI_CHEAT_TOLERANCE = int(os.environ.get('ANTI_CHEAT_TOLERANCE', 3))  # Focus loss tolerance before blocking
+SESSION_HEARTBEAT_INTERVAL = int(os.environ.get('SESSION_HEARTBEAT_INTERVAL', 5))  # Heartbeat every 5 seconds
+
+# IP Tracking Configuration
+ENABLE_IP_TRACKING = os.environ.get('ENABLE_IP_TRACKING', 'true').lower() == 'true'
+TRUST_PROXY_HEADERS = os.environ.get('TRUST_PROXY_HEADERS', 'true').lower() == 'true'
+MAX_IP_HISTORY = int(os.environ.get('MAX_IP_HISTORY', 10))  # Keep last 10 IP addresses per user
+
+#==== IP Address Tracking Utility ====
+
+def get_client_ip():
+    """Get the real client IP address, considering proxy headers if enabled"""
+    if TRUST_PROXY_HEADERS:
+        # Check common proxy headers in order of preference
+        forwarded_for = request.headers.get('X-Forwarded-For')
+        if forwarded_for:
+            # X-Forwarded-For can contain multiple IPs, take the first one
+            return forwarded_for.split(',')[0].strip()
+        
+        real_ip = request.headers.get('X-Real-IP')
+        if real_ip:
+            return real_ip.strip()
+        
+        # Cloudflare specific header
+        cf_connecting_ip = request.headers.get('CF-Connecting-IP')
+        if cf_connecting_ip:
+            return cf_connecting_ip.strip()
+    
+    # Fall back to direct connection IP
+    return request.remote_addr or 'Unknown'
+
+def log_user_ip(user_id, action="login"):
+    """Log user IP address for tracking purposes"""
+    if not ENABLE_IP_TRACKING:
+        return
+    
+    try:
+        ip_address = get_client_ip()
+        user_agent = request.headers.get('User-Agent', 'Unknown')
+        
+        # Create IP log entry
+        ip_log = IPLog(
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            action=action,
+            timestamp=datetime.utcnow()
+        )
+        
+        db.session.add(ip_log)
+        
+        # Clean up old IP logs to prevent database bloat
+        cleanup_old_ip_logs(user_id)
+        
+        db.session.commit()
+        
+    except Exception as e:
+        print(f"❌ Failed to log IP for user {user_id}: {str(e)}")
+        db.session.rollback()
+
+def cleanup_old_ip_logs(user_id):
+    """Keep only the most recent IP logs for a user"""
+    try:
+        # Get count of logs for this user
+        log_count = IPLog.query.filter_by(user_id=user_id).count()
+        
+        if log_count > MAX_IP_HISTORY:
+            # Get oldest logs to delete
+            logs_to_delete = IPLog.query.filter_by(user_id=user_id)\
+                .order_by(IPLog.timestamp.asc())\
+                .limit(log_count - MAX_IP_HISTORY)\
+                .all()
+            
+            for log in logs_to_delete:
+                db.session.delete(log)
+                
+    except Exception as e:
+        print(f"❌ Failed to cleanup IP logs for user {user_id}: {str(e)}")
+
+#==== CSRF Token Setup ====
+
+@app.before_request 
+def csrf_protect(): 
+    # Skip CSRF protection if Flask-WTF CSRF is enabled (it handles it automatically)
+    if CSRF_ENABLED:
+        return
+        
+    # Manual CSRF protection for when Flask-WTF CSRF is disabled
+    if request.method == "POST": 
+        # Skip CSRF for certain endpoints if needed
+        exempt_endpoints = ['api_endpoint']  # Add any API endpoints here
+        if request.endpoint in exempt_endpoints:
+            return
+            
+        csrf_token = session.get('_csrf_token') 
+        form_token = request.form.get('csrf_token')
+        json_token = None
+        
+        # Check for CSRF token in JSON requests
+        if request.is_json:
+            json_token = request.json.get('csrf_token') if request.json else None
+            
+        if not csrf_token or csrf_token not in [form_token, json_token]: 
+            return jsonify({'error': 'CSRF token missing or incorrect'}), 400
+
+def generate_csrf_token(): 
+    if '_csrf_token' not in session: 
+        session['_csrf_token'] = secrets.token_hex(CSRF_TOKEN_LENGTH) 
+    return session['_csrf_token']
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+#==== Email Config ====
+
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER') 
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587)) 
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True') == 'True' 
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME') 
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD') 
+mail = Mail(app)
+
+#==== Rate Limiting ====
+
+limiter = Limiter(key_func=get_remote_address, app=app, default_limits=[LOGIN_RATE_LIMIT])
+
+#==== Firebase Setup ====
+
+firebase_base64 = os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY") 
+if firebase_base64:
+    try:
+        firebase_dict = json.loads(base64.b64decode(firebase_base64).decode('utf-8')) 
+        cred = credentials.Certificate(firebase_dict) 
+        firebase_admin.initialize_app(cred) 
+        db_firestore = firestore.client()
+        print("✅ Firebase initialized successfully")
+    except Exception as e:
+        print(f"❌ Firebase initialization failed: {str(e)}")
+        db_firestore = None
+else:
+    print("⚠️ Firebase not configured")
+    db_firestore = None
+
+#==== Serializer for Email Tokens ====
+
+serializer = URLSafeTimedSerializer(app.secret_key)
+
+#==== DB Models ====
+
+class User(db.Model): 
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False) 
+    password_hash = db.Column(db.String(200), nullable=False) 
+    account_type = db.Column(db.String(10), nullable=False) 
+    is_verified = db.Column(db.Boolean, default=False) 
+    last_login_date = db.Column(db.DateTime) 
+    total_watch_minutes = db.Column(db.Integer, default=0) 
+    daily_bonus_given = db.Column(db.Boolean, default=False) 
+    balance_usd = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_ip = db.Column(db.String(45))  # Store last known IP (IPv6 can be up to 45 chars)
+    first_name = db.Column(db.String(50))
+    last_name = db.Column(db.String(50))
+    phone = db.Column(db.String(20))
+    last_bonus_date = db.Column(db.Date)
+    daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
+        
+    # Anti-cheat fields
+    videos_watched_today = db.Column(db.Integer, default=0)
+    last_video_date = db.Column(db.Date)
+    cheat_violations = db.Column(db.Integer, default=0)
+    is_banned = db.Column(db.Boolean, default=False)
+    ban_reason = db.Column(db.String(200))
+    session_start_time = db.Column(db.DateTime)
+    last_heartbeat = db.Column(db.DateTime)
+    last_bonus_claim = db.Column(db.DateTime)  # When bonus was last claimed
+    last_activity_date = db.Column(db.Date, default=datetime.utcnow().date())  # Use Date (not db.date)
+    current_session_start = db.Column(db.DateTime)
+    total_daily_bonuses = db.Column(db.Integer, default=0)
+    
+    # Session tracking 
+    session_token = db.Column(db.String(64))
+
+    # Consecutive days and bonuses
+    consecutive_days = db.Column(db.Integer, default=0)
+
+    # Anti-cheat specific fields
+    back_button_pressed = db.Column(db.Boolean, default=False)
+    focus_lost_count = db.Column(db.Integer, default=0)
+    
+    # Additional tracking fields
+    total_watch_time = db.Column(db.Integer, default=0)
+    last_ip_address = db.Column(db.String(45))
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Advanced Anti-Cheat Fields
+    device_fingerprint = db.Column(db.String(200))  # Browser/device fingerprint
+    time_zone = db.Column(db.String(50))  # User's timezone
+    screen_resolution = db.Column(db.String(20))  # Screen dimensions
+    user_agent_hash = db.Column(db.String(64))  # Hashed user agent
+    click_pattern_score = db.Column(db.Float, default=0.0)  # ML-based click pattern analysis
+    watch_velocity_score = db.Column(db.Float, default=0.0)  # Video consumption velocity
+    behavioral_score = db.Column(db.Float, default=0.0)  # Overall behavioral analysis score
+    proxy_detected = db.Column(db.Boolean, default=False)  # VPN/Proxy detection
+    automation_detected = db.Column(db.Boolean, default=False)  # Bot/automation detection
+    suspicious_activity_count = db.Column(db.Integer, default=0)  # Count of suspicious events
+    risk_level = db.Column(db.String(10), default='low')  # low, medium, high, critical
+    last_risk_assessment = db.Column(db.DateTime)  # When risk was last calculated
+    
+    # Device/Browser Consistency Tracking
+    browser_changes_count = db.Column(db.Integer, default=0)  # How often browser changes
+    device_changes_count = db.Column(db.Integer, default=0)  # How often device changes
+    location_changes_count = db.Column(db.Integer, default=0)  # Geographic changes
+    
+    # Machine Learning Features
+    ml_fraud_probability = db.Column(db.Float, default=0.0)  # ML model fraud probability
+    feature_vector_hash = db.Column(db.String(64))  # Hash of ML features for comparison
+
+class IPLog(db.Model):
+    """Track user IP addresses and login history"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=False)  # IPv6 support
+    user_agent = db.Column(db.Text)  # Browser/device info
+    action = db.Column(db.String(50), default='login')  # login, register, etc.
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref=db.backref('ip_logs', lazy=True))
+
+class WithdrawalRequest(db.Model): 
+    id = db.Column(db.Integer, primary_key=True) 
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
+    amount = db.Column(db.Float, nullable=False) 
+    status = db.Column(db.String(20), default='pending') 
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Add relationship
+    user = db.relationship('User', backref=db.backref('withdrawal_requests', lazy=True))
+
+class Video(db.Model): 
+    id = db.Column(db.Integer, primary_key=True) 
+    title = db.Column(db.String(200), nullable=False) 
+    video_url = db.Column(db.String(500), nullable=False) 
+    added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
+    min_watch_time = db.Column(db.Integer, default=VIDEO_WATCH_TIME)  # seconds
+    reward_amount = db.Column(db.Float, default=VIDEO_REWARD_AMOUNT)
+    
+    # Add relationship
+    uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
+
+class WatchSession(db.Model):
+    __tablename__ = 'watch_sessions'
+    """Track individual video watch sessions for anti-cheat"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    session_token = db.Column(db.String(100), unique=True, nullable=False)
+    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    end_time = db.Column(db.DateTime)
+    watch_duration = db.Column(db.Integer, default=0)  # seconds actually watched
+    focus_lost_count = db.Column(db.Integer, default=0)  # how many times user lost focus
+    back_button_pressed = db.Column(db.Boolean, default=False)
+    reward_given = db.Column(db.Boolean, default=False)
+    cheating_detected = db.Column(db.Boolean, default=False)
+    cheat_reason = db.Column(db.String(200))
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    video_length = db.Column(db.Integer)  # total video length in seconds
+    is_completed = db.Column(db.Boolean, default=False)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
+    video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
+
+class DailySession(db.Model):
+    """Track daily online sessions for daily rewards"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_date = db.Column(db.Date, default=datetime.utcnow().date)
+    session_token = db.Column(db.String(100), unique=True, nullable=False)
+    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    last_heartbeat = db.Column(db.DateTime, default=datetime.utcnow)
+    total_online_time = db.Column(db.Integer, default=0)  # seconds
+    focus_lost_count = db.Column(db.Integer, default=0)
+    daily_reward_given = db.Column(db.Boolean, default=False)
+    is_valid = db.Column(db.Boolean, default=True)
+    ip_address = db.Column(db.String(45))
+    
+    user = db.relationship('User', backref=db.backref('daily_sessions', lazy=True))
+
+class Withdrawal(db.Model):
+    """Completed withdrawals"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    method = db.Column(db.String(50))  # PayPal, Bank, etc.
+    transaction_id = db.Column(db.String(100))
+    status = db.Column(db.String(20), default='completed')
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('withdrawals', lazy=True))
+
+class Earning(db.Model):
+    """Track user earnings"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(50))  # 'watch', 'daily_bonus', 'referral', etc.
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('earnings', lazy=True))
+    video = db.relationship('Video', backref=db.backref('earnings', lazy=True))
+
+class DeviceFingerprint(db.Model):
+    """Track device fingerprints for fraud detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    fingerprint_hash = db.Column(db.String(200), nullable=False)
+    screen_resolution = db.Column(db.String(20))
+    timezone = db.Column(db.String(50))
+    language = db.Column(db.String(10))
+    user_agent = db.Column(db.Text)
+    canvas_fingerprint = db.Column(db.String(100))  # Canvas-based fingerprinting
+    webgl_fingerprint = db.Column(db.String(100))   # WebGL-based fingerprinting
+    audio_fingerprint = db.Column(db.String(100))   # Audio context fingerprinting
+    plugins_list = db.Column(db.Text)  # Installed browser plugins
+    fonts_list = db.Column(db.Text)    # Available fonts
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    times_seen = db.Column(db.Integer, default=1)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    
+    user = db.relationship('User', backref=db.backref('device_fingerprints', lazy=True))
+
+class SecurityEvent(db.Model):
+    """Log security events and suspicious activities"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    event_type = db.Column(db.String(50), nullable=False)  # 'proxy_detected', 'bot_detected', etc.
+    severity = db.Column(db.String(10), default='low')  # low, medium, high, critical
+    description = db.Column(db.Text)
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    session_token = db.Column(db.String(100))
+    additional_data = db.Column(db.JSON)  # Store additional context as JSON
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved = db.Column(db.Boolean, default=False)
+    admin_notes = db.Column(db.Text)
+    
+    user = db.relationship('User', backref=db.backref('security_events', lazy=True))
+
+class MouseMovement(db.Model):
+    """Track mouse movements for bot detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=False)
+    timestamp = db.Column(db.Float, nullable=False)  # Milliseconds since session start
+    x_coordinate = db.Column(db.Integer)
+    y_coordinate = db.Column(db.Integer)
+    event_type = db.Column(db.String(10))  # 'move', 'click', 'scroll'
+    velocity = db.Column(db.Float)  # Calculated velocity
+    is_human_like = db.Column(db.Boolean, default=True)
+    
+    session = db.relationship('WatchSession', backref=db.backref('mouse_movements', lazy=True))
+
+class KeystrokePattern(db.Model):
+    """Track keystroke patterns for behavioral analysis"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_token = db.Column(db.String(100))
+    key_pressed = db.Column(db.String(10))  # Which key was pressed
+    dwell_time = db.Column(db.Float)  # How long key was held
+    flight_time = db.Column(db.Float)  # Time between key releases
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    is_suspicious = db.Column(db.Boolean, default=False)
+    
+    user = db.relationship('User', backref=db.backref('keystroke_patterns', lazy=True))
+
+class GeoLocation(db.Model):
+    """Track user locations for anomaly detection"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ip_address = db.Column(db.String(45), nullable=False)
+    country = db.Column(db.String(2))  # ISO country code
+    region = db.Column(db.String(50))
+    city = db.Column(db.String(50))
+    latitude = db.Column(db.Float)
+    longitude = db.Column(db.Float)
+    is_proxy = db.Column(db.Boolean, default=False)
+    is_vpn = db.Column(db.Boolean, default=False)
+    is_tor = db.Column(db.Boolean, default=False)
+    isp = db.Column(db.String(100))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    distance_from_last = db.Column(db.Float)  # Distance in km from last location
+    
+    user = db.relationship('User', backref=db.backref('geo_locations', lazy=True))
+
+class RiskScore(db.Model):
+    """Store ML-based risk scores and fraud predictions"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
+    model_version = db.Column(db.String(20))  # Which ML model version was used
+    fraud_probability = db.Column(db.Float, nullable=False)  # 0.0 to 1.0
+    behavioral_score = db.Column(db.Float)
+    device_score = db.Column(db.Float)
+    location_score = db.Column(db.Float)
+    pattern_score = db.Column(db.Float)
+    velocity_score = db.Column(db.Float)
+    final_risk_level = db.Column(db.String(10))  # low, medium, high, critical
+    features_used = db.Column(db.JSON)  # Which features contributed to the score
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    action_taken = db.Column(db.String(50))  # What action was taken based on score
+    
+    user = db.relationship('User', backref=db.backref('risk_scores', lazy=True))
+    session = db.relationship('WatchSession', backref=db.backref('risk_scores', lazy=True))
+
+class HoneypotInteraction(db.Model):
+    """Track interactions with honeypot elements (invisible buttons/links)"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    session_token = db.Column(db.String(100))
+    honeypot_type = db.Column(db.String(50))  # 'invisible_button', 'hidden_link', etc.
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    automatic_ban = db.Column(db.Boolean, default=True)  # Auto-ban on honeypot interaction
+    
+    user = db.relationship('User', backref=db.backref('honeypot_interactions', lazy=True))
+    
+#==== Anti-Cheat Utility Functions ====
+
+def reset_daily_data_if_needed(user):
+    """Reset daily data if it's a new day"""
+    today = datetime.utcnow().date()
+    
+    # Check if it's a new day compared to last activity
+    if not user.last_activity_date or user.last_activity_date != today:
+        logging.info(f"Resetting daily data for user {user.id} - New day detected")
+        
+        # Reset daily counters
+        user.daily_online_time = 0
+        user.daily_bonus_given = False
+        user.videos_watched_today = 0
+        user.last_activity_date = today
+        user.current_session_start = datetime.utcnow()
+        user.session_start_time = datetime.utcnow()  # Reset session tracking
+        user.last_heartbeat = datetime.utcnow()
+        
+        # Handle consecutive days logic
+        if user.last_bonus_date:
+            # If user claimed bonus yesterday, they maintain streak
+            if user.last_bonus_date == today - timedelta(days=1):
+                # Consecutive days maintained
+                pass
+            else:
+                # Streak broken - reset consecutive days
+                user.consecutive_days = 0
+        
+        # Commit the reset
+        try:
+            db.session.commit()
+            logging.info(f"Daily data reset successful for user {user.id}")
+        except Exception as e:
+            logging.error(f"Failed to reset daily data for user {user.id}: {str(e)}")
+            db.session.rollback()
+            raise e
+    
+    return user
+
+# Additional helper function to check daily bonus eligibility
+def can_claim_daily_bonus(user):
+    """Check if user can claim daily bonus"""
+    today = datetime.utcnow().date()
+    
+    # Check if already claimed today
+    if user.daily_bonus_given and user.last_bonus_date == today:
+        return False, "Already claimed today"
+    
+    # Check online time requirement
+    if user.daily_online_time < DAILY_ONLINE_TIME:
+        return False, f"Need {DAILY_ONLINE_TIME - user.daily_online_time} more seconds online"
+    
+    # Check if user is banned
+    if user.is_banned:
+        return False, "Account is banned"
+    
+    return True, "Eligible for bonus"
+
+def create_session_token():
+    """Create a unique session token"""
+    return secrets.token_urlsafe(32)
+
+def check_daily_video_limit(user_id):
+    """Check if user has reached daily video limit"""
+    user = User.query.get(user_id)
+    if not user:
         return False
-
-    def can_watch_videos(self):
-        """Check if user can watch videos (not banned, verified, etc.)"""
-        return (self.is_verified and 
-                not self.is_banned and 
-                not self.is_account_locked() and
-                self.trust_score >= 50.00)
-
-    def reset_daily_stats(self):
-        """Reset daily statistics"""
-        self.videos_watched_today = 0
-        self.daily_online_time = 0
-        self.is_active_today = False
-        self.save()
-
-
-class IPLog(models.Model):
-    """Track user IP addresses for security"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ip_logs')
-    ip_address = models.GenericIPAddressField()
-    user_agent = models.TextField(blank=True)
-    action = models.CharField(max_length=50, default='login')
-    country = models.CharField(max_length=100, blank=True)
-    city = models.CharField(max_length=100, blank=True)
-    is_suspicious = models.BooleanField(default=False)
-    timestamp = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ['-timestamp']
-        indexes = [
-            models.Index(fields=['user', 'timestamp']),
-            models.Index(fields=['ip_address', 'timestamp']),
-        ]
-
-    def __str__(self):
-        return f"{self.user.username} - {self.ip_address} - {self.action}"
-
-
-class ContentCategory(models.Model):
-    """Categories for videos/content with enhanced features"""
-    name = models.CharField(max_length=100, unique=True)
-    description = models.TextField(blank=True)
-    reward_multiplier = models.DecimalField(max_digits=3, decimal_places=2, default=1.00)
-    min_trust_score = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    max_daily_videos = models.PositiveIntegerField(default=50)
-    is_active = models.BooleanField(default=True)
-    requires_verification = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        verbose_name_plural = "Content Categories"
-
-    def __str__(self):
-        return self.name
-
-
-class Video(models.Model):
-    """Enhanced video content model"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    video_url = models.URLField()
-    thumbnail_url = models.URLField(blank=True)
-    duration = models.PositiveIntegerField(help_text="Duration in seconds")
-    category = models.ForeignKey(ContentCategory, on_delete=models.CASCADE)
-    
-    # Reward System
-    base_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.01)
-    bonus_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    minimum_watch_time = models.PositiveIntegerField(default=30, help_text="Minimum watch time in seconds")
-    minimum_watch_percentage = models.PositiveIntegerField(default=70, help_text="Minimum watch percentage")
-    
-    # Restrictions
-    max_views_per_user = models.PositiveIntegerField(default=1)
-    cooldown_hours = models.PositiveIntegerField(default=0, help_text="Hours before user can rewatch")
-    min_account_age_days = models.PositiveIntegerField(default=0)
-    geographic_restrictions = models.JSONField(default=list, blank=True)
-    
-    # Status and Stats
-    is_active = models.BooleanField(default=True)
-    is_featured = models.BooleanField(default=False)
-    views_count = models.PositiveIntegerField(default=0)
-    unique_viewers = models.PositiveIntegerField(default=0)
-    total_rewards_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
-    # Quality Control
-    quality_score = models.DecimalField(max_digits=3, decimal_places=2, default=5.00)
-    reported_count = models.PositiveIntegerField(default=0)
-    is_under_review = models.BooleanField(default=False)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(null=True, blank=True)
-
-    def __str__(self):
-        return self.title
-
-    @property
-    def calculated_reward(self):
-        """Calculate total reward including bonus"""
-        base = self.base_reward * self.category.reward_multiplier
-        return base + self.bonus_reward
-
-    @property
-    def minimum_watch_seconds(self):
-        """Calculate minimum watch time based on percentage or fixed time"""
-        percentage_time = (self.duration * self.minimum_watch_percentage) // 100
-        return max(self.minimum_watch_time, percentage_time)
-
-    def can_user_watch(self, user):
-        """Check if user can watch this video"""
-        if not self.is_active or (self.expires_at and self.expires_at < timezone.now()):
-            return False, "Video not available"
         
-        if user.trust_score < self.category.min_trust_score:
-            return False, "Trust score too low"
+    today = datetime.utcnow().date()
+    
+    # Reset daily count if it's a new day
+    if not user.last_video_date or user.last_video_date != today:
+        user.videos_watched_today = 0
+        user.last_video_date = today
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Failed to reset video count for user {user_id}: {str(e)}")
+            db.session.rollback()
+    
+    return user.videos_watched_today < MAX_VIDEOS_PER_DAY
+
+def is_user_banned(user_id):
+    """Check if user is banned"""
+    user = User.query.get(user_id)
+    return user and user.is_banned
+
+def ban_user(user_id, reason):
+    """Ban user for cheating"""
+    user = User.query.get(user_id)
+    if user:
+        user.is_banned = True
+        user.ban_reason = reason
+        user.cheat_violations += 1
+        try:
+            db.session.commit()
+            logging.warning(f"🚨 User {user_id} banned: {reason}")
+        except Exception as e:
+            logging.error(f"Failed to ban user {user_id}: {str(e)}")
+            db.session.rollback()
+
+def detect_cheating(watch_session):
+    """Detect various cheating methods"""
+    cheating_detected = False
+    reasons = []
+    
+    # Check if watch session exists and has required data
+    if not watch_session:
+        return False, []
+    
+    # 1. Check for impossible watch speeds
+    if watch_session.video_length and watch_session.watch_duration:
+        watch_ratio = watch_session.watch_duration / watch_session.video_length
+        if watch_ratio > 1.5:  # Watched 50% faster than possible
+            cheating_detected = True
+            reasons.append("Impossible watch speed detected")
+    
+    # 2. Check for too short watch time
+    if watch_session.watch_duration and watch_session.watch_duration < MIN_WATCH_TIME:
+        cheating_detected = True
+        reasons.append("Watch time too short")
+    
+    # 3. Check for session duration anomalies
+    if watch_session.start_time and watch_session.end_time:
+        actual_duration = (watch_session.end_time - watch_session.start_time).total_seconds()
+        if watch_session.watch_duration > actual_duration * 1.2:  # 20% tolerance
+            cheating_detected = True
+            reasons.append("Watch duration exceeds session time")
+    
+    # 4. Check for multiple sessions from same IP in short time
+    recent_sessions = WatchSession.query.filter(
+        WatchSession.ip_address == watch_session.ip_address,
+        WatchSession.start_time >= datetime.utcnow() - timedelta(minutes=5),
+        WatchSession.user_id != watch_session.user_id
+    ).count()
+    
+    if recent_sessions > 3:  # More than 3 different users from same IP in 5 minutes
+        cheating_detected = True
+        reasons.append("Multiple accounts from same IP")
+    
+    # 5. Check if back button was pressed
+    if watch_session.back_button_pressed:
+        cheating_detected = True
+        reasons.append("Back button pressed")
+    
+    # 6. Check excessive focus loss
+    if watch_session.focus_lost_count > ANTI_CHEAT_TOLERANCE:
+        cheating_detected = True
+        reasons.append(f"Lost focus {watch_session.focus_lost_count} times")
+    
+    # 7. Check if watch duration is suspiciously short
+    if watch_session.watch_duration < VIDEO_WATCH_TIME - 5:  # 5 second tolerance
+        cheating_detected = True
+        reasons.append("Insufficient watch time")
+    
+    # 8. Check if session was too fast (impossible timing)
+    if watch_session.end_time and watch_session.start_time:
+        actual_duration = (watch_session.end_time - watch_session.start_time).total_seconds()
+        if actual_duration < VIDEO_WATCH_TIME - 10:  # 10 second tolerance
+            cheating_detected = True
+            reasons.append("Session completed too quickly")
+    
+    return cheating_detected, reasons
+
+# Additional helper functions you'll need:
+
+def start_watch_session(user_id, video_id, video_length, ip_address, user_agent):
+    """Start a new watch session"""
+    user = User.query.get(user_id)
+    if not user or user.is_banned:
+        return None, "User not found or banned"
+    
+    # Check daily limits
+    if not check_daily_video_limit(user_id):
+        return None, "Daily video limit reached"
+    
+    # Reset daily data if needed
+    reset_daily_data_if_needed(user)
+    
+    # Create new watch session
+    watch_session = WatchSession(
+        user_id=user_id,
+        video_id=video_id,
+        video_length=video_length,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        start_time=datetime.utcnow()
+    )
+    
+    try:
+        db.session.add(watch_session)
+        db.session.commit()
+        logging.info(f"Started watch session for user {user_id}, video {video_id}")
+        return watch_session, "Success"
+    except Exception as e:
+        logging.error(f"Failed to start watch session: {str(e)}")
+        db.session.rollback()
+        return None, "Database error"
+
+def end_watch_session(session_id, watch_duration):
+    """End a watch session and check for cheating"""
+    watch_session = WatchSession.query.get(session_id)
+    if not watch_session:
+        return False, "Session not found"
+    
+    # Update session end time and duration
+    watch_session.end_time = datetime.utcnow()
+    watch_session.watch_duration = watch_duration
+    
+    # Check for cheating
+    is_cheating, cheat_reasons = detect_cheating(watch_session)
+    
+    if is_cheating:
+        watch_session.is_suspicious = True
+        ban_user(watch_session.user_id, f"Cheating detected: {', '.join(cheat_reasons)}")
         
-        # Check if user has already watched maximum times
-        watch_count = WatchSession.objects.filter(
-            user=user, 
-            video=self,
-            is_completed=True
-        ).count()
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Failed to mark session as suspicious: {str(e)}")
+            db.session.rollback()
         
-        if watch_count >= self.max_views_per_user:
-            return False, "Maximum views reached"
+        return False, f"Cheating detected: {', '.join(cheat_reasons)}"
+    
+    # Mark as completed and update user stats
+    watch_session.is_completed = True
+    user = User.query.get(watch_session.user_id)
+    
+    if user:
+        user.videos_watched_today += 1
+        user.total_watch_time += watch_duration
+        user.daily_online_time += watch_duration
         
-        # Check cooldown
-        if self.cooldown_hours > 0:
-            last_watch = WatchSession.objects.filter(
-                user=user,
-                video=self,
-                is_completed=True
-            ).order_by('-end_time').first()
-            
-            if last_watch:
-                cooldown_end = last_watch.end_time + timezone.timedelta(hours=self.cooldown_hours)
-                if timezone.now() < cooldown_end:
-                    return False, f"Cooldown active until {cooldown_end}"
-        
-        return True, "OK"
-
-
-class WatchSession(models.Model):
-    """Enhanced watch session tracking with anti-cheat"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    video = models.ForeignKey(Video, on_delete=models.CASCADE)
+        # Check if daily online time exceeded
+        if user.daily_online_time > MAX_DAILY_ONLINE_TIME:
+            ban_user(user.id, "Exceeded maximum daily online time")
+            try:
+                db.session.commit()
+            except Exception as e:
+                logging.error(f"Failed to update user stats: {str(e)}")
+                db.session.rollback()
+            return False, "Daily time limit exceeded"
     
-    # Session Timing
-    start_time = models.DateTimeField(auto_now_add=True)
-    end_time = models.DateTimeField(null=True, blank=True)
-    duration_watched = models.PositiveIntegerField(default=0, help_text="Duration watched in seconds")
-    watch_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    try:
+        db.session.commit()
+        logging.info(f"Completed watch session {session_id} for user {watch_session.user_id}")
+        return True, "Session completed successfully"
+    except Exception as e:
+        logging.error(f"Failed to complete watch session: {str(e)}")
+        db.session.rollback()
+        return False, "Database error"
+
+def get_user_stats(user_id):
+    """Get comprehensive user statistics"""
+    user = User.query.get(user_id)
+    if not user:
+        return None
     
-    # Status
-    is_completed = models.BooleanField(default=False)
-    is_valid = models.BooleanField(default=True)
-    reward_earned = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    reward_paid = models.BooleanField(default=False)
+    today = datetime.utcnow().date()
     
-    # Anti-Cheat Data
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
-    heartbeat_count = models.PositiveIntegerField(default=0)
-    tab_switches = models.PositiveIntegerField(default=0)
-    play_speed_changes = models.PositiveIntegerField(default=0)
-    suspicious_activity = models.JSONField(default=dict, blank=True)
+    # Reset daily data if needed
+    reset_daily_data_if_needed(user)
     
-    # Quality Metrics
-    average_playback_speed = models.DecimalField(max_digits=3, decimal_places=2, default=1.00)
-    interaction_count = models.PositiveIntegerField(default=0)
-    volume_changes = models.PositiveIntegerField(default=0)
+    stats = {
+        'user_id': user.id,
+        'username': user.username,
+        'videos_watched_today': user.videos_watched_today,
+        'daily_online_time': user.daily_online_time,
+        'daily_bonus_given': user.daily_bonus_given,
+        'consecutive_days': user.consecutive_days,
+        'total_watch_time': user.total_watch_time,
+        'is_banned': user.is_banned,
+        'ban_reason': user.ban_reason,
+        'videos_remaining_today': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
+        'can_watch_more': user.videos_watched_today < MAX_VIDEOS_PER_DAY and not user.is_banned
+    }
     
-    # Validation
-    is_flagged = models.BooleanField(default=False)
-    flag_reason = models.TextField(blank=True)
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_sessions')
-    reviewed_at = models.DateTimeField(null=True, blank=True)
+    return stats
 
-    class Meta:
-        indexes = [
-            models.Index(fields=['user', 'start_time']),
-            models.Index(fields=['video', 'start_time']),
-            models.Index(fields=['is_completed', 'reward_paid']),
-        ]
-
-    def __str__(self):
-        return f"{self.user.username} - {self.video.title}"
-
-    def clean(self):
-        """Validate watch session data"""
-        if self.duration_watched > self.video.duration + 30:  # 30 second buffer
-            raise ValidationError("Watch duration cannot exceed video duration")
-        
-        if self.watch_percentage > 100:
-            raise ValidationError("Watch percentage cannot exceed 100%")
-
-    def calculate_watch_percentage(self):
-        """Calculate and update watch percentage"""
-        if self.video.duration > 0:
-            self.watch_percentage = (self.duration_watched / self.video.duration) * 100
-        return self.watch_percentage
-
-    def is_eligible_for_reward(self):
-        """Check if session is eligible for reward"""
-        if not self.is_valid or self.is_flagged:
-            return False
-        
-        min_watch_time = self.video.minimum_watch_seconds
-        return (self.duration_watched >= min_watch_time and 
-                self.watch_percentage >= self.video.minimum_watch_percentage)
-
-    def save(self, *args, **kwargs):
-        # Calculate watch percentage
-        self.calculate_watch_percentage()
-        
-        # Check completion and award reward
-        if (self.is_eligible_for_reward() and 
-            not self.is_completed and 
-            not self.reward_paid):
-            
-            self.is_completed = True
-            self.reward_earned = self.video.calculated_reward
-            
-            # Create transaction record
-            Transaction.objects.create(
-                user=self.user,
-                transaction_type='WATCH_REWARD',
-                amount=self.reward_earned,
-                description=f"Watched: {self.video.title}",
-                reference_id=str(self.id),
-                status='PENDING'
-            )
-            
-        super().save(*args, **kwargs)
-
-
-class DailyReward(models.Model):
-    """Enhanced daily login rewards with streaks"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    date = models.DateField(default=timezone.now)
+def cleanup_old_sessions():
+    """Clean up old watch sessions (run this periodically)"""
+    cutoff_date = datetime.utcnow() - timedelta(days=30)
     
-    # Requirements
-    online_duration = models.PositiveIntegerField(default=0, help_text="Time spent online in seconds")
-    required_duration = models.PositiveIntegerField(default=300, help_text="Required 5 minutes online")
-    videos_watched = models.PositiveIntegerField(default=0)
-    required_videos = models.PositiveIntegerField(default=3)
-    
-    # Reward Details
-    base_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.05)
-    streak_bonus = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    total_reward = models.DecimalField(max_digits=5, decimal_places=2, default=0.05)
-    
-    # Status
-    requirements_met = models.BooleanField(default=False)
-    is_claimed = models.BooleanField(default=False)
-    claimed_at = models.DateTimeField(null=True, blank=True)
-    
-    # Streak Info
-    consecutive_days = models.PositiveIntegerField(default=1)
-    is_streak_day = models.BooleanField(default=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
+    try:
+        old_sessions = WatchSession.query.filter(WatchSession.created_at < cutoff_date).delete()
+        db.session.commit()
+        logging.info(f"Cleaned up {old_sessions} old watch sessions")
+    except Exception as e:
+        logging.error(f"Failed to cleanup old sessions: {str(e)}")
+        db.session.rollback()
 
-    class Meta:
-        unique_together = ['user', 'date']
-        indexes = [
-            models.Index(fields=['user', 'date']),
-            models.Index(fields=['date', 'is_claimed']),
-        ]
-
-    def __str__(self):
-        return f"{self.user.username} - {self.date}"
-
-    def calculate_streak_bonus(self):
-        """Calculate bonus based on consecutive days"""
-        if self.consecutive_days >= 30:
-            self.streak_bonus = self.base_reward * 2.0  # 200% bonus
-        elif self.consecutive_days >= 14:
-            self.streak_bonus = self.base_reward * 1.0  # 100% bonus
-        elif self.consecutive_days >= 7:
-            self.streak_bonus = self.base_reward * 0.5  # 50% bonus
-        else:
-            self.streak_bonus = 0.00
-        
-        self.total_reward = self.base_reward + self.streak_bonus
-
-    def check_requirements(self):
-        """Check if all requirements are met"""
-        self.requirements_met = (
-            self.online_duration >= self.required_duration and
-            self.videos_watched >= self.required_videos
-        )
-        return self.requirements_met
-
-    def can_claim_reward(self):
-        """Check if user can claim daily reward"""
-        return (self.check_requirements() and 
-                not self.is_claimed and 
-                not self.user.is_banned)
-
-    def claim_reward(self):
-        """Claim daily reward and update user balance"""
-        if self.can_claim_reward():
-            self.calculate_streak_bonus()
-            self.is_claimed = True
-            self.claimed_at = timezone.now()
-            
-            # Update user earnings
-            self.user.total_earnings += self.total_reward
-            self.user.available_balance += self.total_reward
-            self.user.total_daily_bonuses += 1
-            self.user.consecutive_days = self.consecutive_days
-            self.user.last_bonus_claim = timezone.now()
-            self.user.save()
-            
-            # Create transaction record
-            Transaction.objects.create(
-                user=self.user,
-                transaction_type='DAILY_REWARD',
-                amount=self.total_reward,
-                description=f"Daily reward - Day {self.consecutive_days}",
-                reference_id=str(self.id)
-            )
-            
-            self.save()
-            return True
+def validate_session_token(user_id, token):
+    """Validate user session token"""
+    user = User.query.get(user_id)
+    if not user or user.session_token != token:
         return False
+    return True
 
-
-class Transaction(models.Model):
-    """Enhanced transaction logging"""
-    TRANSACTION_TYPES = [
-        ('WATCH_REWARD', 'Watch Reward'),
-        ('DAILY_REWARD', 'Daily Login Reward'),
-        ('REFERRAL_BONUS', 'Referral Bonus'),
-        ('STREAK_BONUS', 'Streak Bonus'),
-        ('ADMIN_BONUS', 'Admin Bonus'),
-        ('WITHDRAWAL', 'Withdrawal'),
-        ('WITHDRAWAL_FEE', 'Withdrawal Fee'),
-        ('REFUND', 'Refund'),
-        ('PENALTY', 'Penalty'),
-        ('CORRECTION', 'Balance Correction'),
-    ]
-    
-    TRANSACTION_STATUS = [
-        ('PENDING', 'Pending'),
-        ('PROCESSING', 'Processing'),
-        ('COMPLETED', 'Completed'),
-        ('FAILED', 'Failed'),
-        ('CANCELLED', 'Cancelled'),
-        ('REVERSED', 'Reversed'),
-    ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    fee = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    net_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=TRANSACTION_STATUS, default='PENDING')
-    
-    # Additional Info
-    description = models.TextField(blank=True)
-    reference_id = models.CharField(max_length=100, blank=True)
-    external_reference = models.CharField(max_length=100, blank=True)
-    metadata = models.JSONField(default=dict, blank=True)
-    
-    # Processing Info
-    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_transactions')
-    processed_at = models.DateTimeField(null=True, blank=True)
-    failure_reason = models.TextField(blank=True)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['user', 'transaction_type', 'created_at']),
-            models.Index(fields=['status', 'created_at']),
-            models.Index(fields=['reference_id']),
-        ]
-
-    def __str__(self):
-        return f"{self.user.username} - {self.transaction_type} - {self.amount}"
-
-    def save(self, *args, **kwargs):
-        # Calculate net amount
-        if self.amount >= 0:  # Credit
-            self.net_amount = self.amount - self.fee
-        else:  # Debit
-            self.net_amount = self.amount - self.fee
+def update_user_session(user_id, ip_address):
+    """Update user session info"""
+    user = User.query.get(user_id)
+    if user:
+        user.last_ip_address = ip_address
+        user.updated_at = datetime.utcnow()
         
-        super().save(*args, **kwargs)
-
-class UserStats(models.Model):
-    """Enhanced daily user statistics"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    date = models.DateField(default=timezone.now)
-    
-    # Daily Activity
-    videos_watched = models.PositiveIntegerField(default=0)
-    total_watch_time = models.PositiveIntegerField(default=0, help_text="Total watch time in seconds")
-    online_duration = models.PositiveIntegerField(default=0, help_text="Time spent online in seconds")
-    sessions_count = models.PositiveIntegerField(default=0)
-    
-    # Earnings
-    daily_earnings = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    watch_rewards = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    bonus_rewards = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    referral_earnings = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    
-    # Engagement Metrics
-    completed_sessions = models.PositiveIntegerField(default=0)
-    invalid_sessions = models.PositiveIntegerField(default=0)
-    flagged_sessions = models.PositiveIntegerField(default=0)
-    average_watch_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    
-    # Referral Activity
-    new_referrals = models.PositiveIntegerField(default=0)
-    active_referrals = models.PositiveIntegerField(default=0)
-    
-    # Quality Metrics
-    trust_score_change = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
-    violations_count = models.PositiveIntegerField(default=0)
-    
-    # Streaks
-    is_streak_day = models.BooleanField(default=False)
-    consecutive_days = models.PositiveIntegerField(default=0)
-    
-    # Login/Activity
-    first_login = models.DateTimeField(null=True, blank=True)
-    last_activity = models.DateTimeField(null=True, blank=True)
-    login_count = models.PositiveIntegerField(default=0)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = ['user', 'date']
-        ordering = ['-date']
-        indexes = [
-            models.Index(fields=['user', 'date']),
-            models.Index(fields=['date', 'daily_earnings']),
-            models.Index(fields=['user', 'consecutive_days']),
-        ]
-
-    def __str__(self):
-        return f"{self.user.username} - {self.date}"
-
-    def calculate_completion_rate(self):
-        """Calculate session completion rate"""
-        total_sessions = self.completed_sessions + self.invalid_sessions
-        if total_sessions > 0:
-            return (self.completed_sessions / total_sessions) * 100
-        return 0.00
-
-    def update_daily_stats(self):
-        """Update daily statistics from related models"""
-        # Get today's watch sessions
-        today_sessions = WatchSession.objects.filter(
-            user=self.user,
-            start_time__date=self.date
-        )
+        # Generate new session token if doesn't exist
+        if not user.session_token:
+            user.session_token = create_session_token()
         
-        self.videos_watched = today_sessions.count()
-        self.completed_sessions = today_sessions.filter(is_completed=True).count()
-        self.invalid_sessions = today_sessions.filter(is_valid=False).count()
-        self.flagged_sessions = today_sessions.filter(is_flagged=True).count()
-        
-        # Calculate total watch time
-        self.total_watch_time = sum(
-            session.duration_watched for session in today_sessions
-        )
-        
-        # Calculate average watch percentage
-        if today_sessions.exists():
-            self.average_watch_percentage = today_sessions.aggregate(
-                avg_percentage=models.Avg('watch_percentage')
-            )['avg_percentage'] or 0.00
-        
-        # Get today's transactions
-        today_transactions = Transaction.objects.filter(
-            user=self.user,
-            created_at__date=self.date,
-            status='COMPLETED'
-        )
-        
-        self.watch_rewards = today_transactions.filter(
-            transaction_type='WATCH_REWARD'
-        ).aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0.00
-        
-        self.bonus_rewards = today_transactions.filter(
-            transaction_type__in=['DAILY_REWARD', 'STREAK_BONUS']
-        ).aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0.00
-        
-        self.referral_earnings = today_transactions.filter(
-            transaction_type='REFERRAL_BONUS'
-        ).aggregate(
-            total=models.Sum('amount')
-        )['total'] or 0.00
-        
-        self.daily_earnings = self.watch_rewards + self.bonus_rewards + self.referral_earnings
-        
-        self.save()
-
-
-# Additional models that might be useful for the complete system
-
-class WithdrawalRequest(models.Model):
-    """Handle withdrawal requests"""
-    WITHDRAWAL_METHODS = [
-        ('BANK', 'Bank Transfer'),
-        ('PAYPAL', 'PayPal'),
-        ('MOBILE_MONEY', 'Mobile Money'),
-        ('CRYPTO', 'Cryptocurrency'),
-    ]
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Failed to update user session: {str(e)}")
+            db.session.rollback()
     
-    WITHDRAWAL_STATUS = [
-        ('PENDING', 'Pending'),
-        ('APPROVED', 'Approved'),
-        ('PROCESSING', 'Processing'),
-        ('COMPLETED', 'Completed'),
-        ('REJECTED', 'Rejected'),
-        ('CANCELLED', 'Cancelled'),
-    ]
+    return user
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    fee = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
-    net_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    withdrawal_method = models.CharField(max_length=20, choices=WITHDRAWAL_METHODS)
-    payment_details = models.JSONField(default=dict)
-    
-    status = models.CharField(max_length=20, choices=WITHDRAWAL_STATUS, default='PENDING')
-    admin_notes = models.TextField(blank=True)
-    
-    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='processed_withdrawals')
-    processed_at = models.DateTimeField(null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+def reset_daily_stats():
+    """Reset daily stats for all users (run this daily via cron)"""
+    try:
+        users = User.query.all()
+        for user in users:
+            user.daily_bonus_given = False
+            user.videos_watched_today = 0
+            user.daily_online_time = 0
+        db.session.commit()
+        logging.info("✅ Daily stats reset for all users")
+    except Exception as e:
+        logging.error(f"❌ Failed to reset daily stats: {str(e)}")
+        db.session.rollback()
 
-    class Meta:
-        ordering = ['-created_at']
+def track_focus_loss(session_id):
+    """Track when user loses focus on video"""
+    watch_session = WatchSession.query.get(session_id)
+    if watch_session:
+        watch_session.focus_lost_count += 1
+        try:
+            db.session.commit()
+            logging.info(f"Focus loss tracked for session {session_id}, count: {watch_session.focus_lost_count}")
+        except Exception as e:
+            logging.error(f"Failed to track focus loss: {str(e)}")
+            db.session.rollback()
 
-    def __str__(self):
-        return f"{self.user.username} - {self.amount} - {self.status}"
+def track_back_button_press(session_id):
+    """Track when user presses back button during video"""
+    watch_session = WatchSession.query.get(session_id)
+    if watch_session:
+        watch_session.back_button_pressed = True
+        try:
+            db.session.commit()
+            logging.warning(f"Back button press detected for session {session_id}")
+        except Exception as e:
+            logging.error(f"Failed to track back button press: {str(e)}")
+            db.session.rollback()
 
-
-class SystemSettings(models.Model):
-    """System-wide settings"""
-    key = models.CharField(max_length=100, unique=True)
-    value = models.TextField()
-    data_type = models.CharField(max_length=20, choices=[
-        ('STRING', 'String'),
-        ('INTEGER', 'Integer'),
-        ('DECIMAL', 'Decimal'),
-        ('BOOLEAN', 'Boolean'),
-        ('JSON', 'JSON'),
-    ], default='STRING')
-    description = models.TextField(blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.key
-
-    def get_value(self):
-        """Get typed value"""
-        if self.data_type == 'INTEGER':
-            return int(self.value)
-        elif self.data_type == 'DECIMAL':
-            return Decimal(self.value)
-        elif self.data_type == 'BOOLEAN':
-            return self.value.lower() in ('true', '1', 'yes')
-        elif self.data_type == 'JSON':
-            return json.loads(self.value)
-        return self.value
-   
-
-#==== Util: Send Email ====
+#==== Utility Functions ====
 
 def send_email(to, subject, body, html_body=None): 
     """Send email with both text and HTML versions"""
+    if not app.config.get('MAIL_SERVER'):
+        print(f"⚠️ Email not configured - would send to {to}: {subject}")
+        return True  # Return True in development to avoid blocking
+        
     try:
         msg = Message(
             subject=subject, 
@@ -690,6 +870,7 @@ def send_email(to, subject, body, html_body=None):
             sender=app.config['MAIL_USERNAME']
         ) 
         mail.send(msg)
+        print(f"✅ Email sent successfully to {to}")
         return True
     except Exception as e:
         print(f"❌ Failed to send email to {to}: {str(e)}")
@@ -765,71 +946,1462 @@ The Watch & Earn Team
 @app.route('/') 
 def home(): 
     if MAINTENANCE_MODE: 
-        return "Site is under maintenance. Please check back later." 
+        return render_template('maintenance.html') if os.path.exists('templates/maintenance.html') else "Site is under maintenance. Please check back later."
     return render_template('home.html')
 
-@app.route('/register', methods=['GET', 'POST']) 
-def register(): 
-    if request.method == 'POST': 
-        email = request.form['email'] 
-        password = request.form['password'] 
-        confirm = request.form.get('confirm_password') 
-        role = request.form['account_type']
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        try:
+            # Get form data with proper handling
+            email = request.form.get('email', '').strip().lower()
+            password = request.form.get('password', '')
+            confirm = request.form.get('confirm_password', '')
+            role = request.form.get('account_type', '')
+            username = request.form.get('username', '').strip()
+            
+            # Auto-generate username from email if not provided
+            if not username:
+                username = email.split('@')[0] if email else None
 
-        if PASSWORD_CONFIRMATION_REQUIRED and password != confirm:
-            return jsonify({'error': 'Passwords do not match'}), 400
+            # Validation
+            if not all([email, password, role]):
+                return jsonify({'error': 'All fields are required'}), 400
+            
+            # Validate username
+            if not username or not username.strip():
+                return jsonify({'error': 'Username is required'}), 400
 
-        if len(password) < PASSWORD_MIN_LENGTH:
-            return jsonify({'error': f'Password must be at least {PASSWORD_MIN_LENGTH} characters'}), 400
+            if PASSWORD_CONFIRMATION_REQUIRED and password != confirm:
+                return jsonify({'error': 'Passwords do not match'}), 400
 
-        if role not in ALLOWED_ROLES:
-            return jsonify({'error': 'Invalid account type'}), 400
+            if len(password) < PASSWORD_MIN_LENGTH:
+                return jsonify({'error': f'Password must be at least {PASSWORD_MIN_LENGTH} characters'}), 400
 
-        if User.query.filter_by(email=email).first():
-            return jsonify({'error': 'Email already exists'}), 409
+            if role not in ALLOWED_ROLES:
+                return jsonify({'error': 'Invalid account type'}), 400
 
-        hashed = generate_password_hash(password)
-        user = User(
-            email=email, 
-            password_hash=hashed, 
-            account_type=role,
-            last_ip=get_client_ip() if ENABLE_IP_TRACKING else None
-        )
-        db.session.add(user)
-        db.session.commit()
+            # Check for existing email
+            if User.query.filter_by(email=email).first():
+                return jsonify({'error': 'Email already exists'}), 409
+            
+            # Check for existing username
+            if User.query.filter_by(username=username).first():
+                return jsonify({'error': 'Username already exists'}), 409
 
-        # Log registration IP
-        log_user_ip(user.id, "register")
+            # Create user with username
+            hashed = generate_password_hash(password)
+            user = User(
+                username=username,  # Add username field
+                email=email, 
+                password_hash=hashed, 
+                account_type=role,
+                last_ip=get_client_ip() if ENABLE_IP_TRACKING else None
+            )
+            
+            db.session.add(user)
+            db.session.commit()
 
-        token = serializer.dumps(email, salt='email-confirm')
-        link = url_for('confirm_email', token=token, _external=True)
-        
-        # Create professional email content
-        text_body, html_body = create_verification_email(email, link)
-        
-        # Send verification email
-        email_sent = send_email(
-            email, 
-            '🎬 Verify Your Watch & Earn Account', 
-            text_body, 
-            html_body
-        )
-        
-        if not email_sent:
-            return jsonify({'error': 'Failed to send verification email. Please try again.'}), 500
+            # Log registration IP
+            log_user_ip(user.id, "register")
 
-        if AUTO_LOGIN_AFTER_REGISTRATION:
-            session['user_id'] = user.id
-            session['account_type'] = user.account_type
-            return redirect(url_for('youtuber_dashboard' if user.account_type == 'YouTuber' else 'user_dashboard'))
+            # Send verification email
+            token = serializer.dumps(email, salt='email-confirm')
+            link = url_for('confirm_email', token=token, _external=True)
+            
+            text_body, html_body = create_verification_email(email, link)
+            
+            email_sent = send_email(
+                email, 
+                '🎬 Verify Your Watch & Earn Account', 
+                text_body, 
+                html_body
+            )
+            
+            if not email_sent:
+                print(f"⚠️ Email failed for {email}, but continuing...")
 
-        return jsonify({
-            'success': True,
-            'message': '🎉 Account created successfully! Please check your email to verify your account.',
-            'email_sent': True
-        })
+            # UPDATED: Always redirect to success page to guide email verification
+            if AUTO_LOGIN_AFTER_REGISTRATION:
+                session['user_id'] = user.id
+                session['account_type'] = user.account_type
+                
+                # Redirect to appropriate success page based on account type
+                if user.account_type == 'YouTuber':
+                    success_route = 'youtuber_registration_success'
+                else:
+                    success_route = 'user_registration_success'
+                    
+                return jsonify({
+                    'success': True,
+                    'redirect': url_for(success_route, email=email),
+                    'account_type': user.account_type,
+                    'email_sent': email_sent
+                })
+
+            # If not auto-login, still redirect to success page
+            if user.account_type == 'YouTuber':
+                success_route = 'youtuber_registration_success'
+            else:
+                success_route = 'user_registration_success'
+                
+            return jsonify({
+                'success': True,
+                'redirect': url_for(success_route, email=email),
+                'account_type': user.account_type,
+                'email_sent': email_sent
+            })
+            
+        except Exception as e:
+            print(f"❌ Registration error: {str(e)}")
+            db.session.rollback()
+            return jsonify({'error': 'Registration failed. Please try again.'}), 500
 
     return render_template('register.html')
+
+
+# Add these new routes for success pages
+@app.route('/registration-success/user')
+def user_registration_success():
+    email = request.args.get('email', '')
+    return render_template('success/user_registration_success.html', email=email)
+
+@app.route('/registration-success/youtuber')
+def youtuber_registration_success():
+    email = request.args.get('email', '')
+    return render_template('success/youtuber_registration_success.html', email=email)
+
+@app.route('/login', methods=['GET', 'POST'])
+@limiter.limit(LOGIN_RATE_LIMIT)
+def login():
+    if request.method == 'POST':
+        try:
+            # Get login credentials - support both email and username
+            email_or_username = request.form.get('email', '').strip().lower()
+            password = request.form.get('password', '')
+            
+            if not email_or_username or not password:
+                return jsonify({'error': 'Email/Username and password are required'}), 400
+            
+            # Try to find user by email first, then by username
+            user = User.query.filter_by(email=email_or_username).first()
+            if not user:
+                user = User.query.filter_by(username=email_or_username).first()
+            
+            if user and user.is_banned:
+                return jsonify({'error': f'Account banned: {user.ban_reason}'}), 403
+            
+            if user and check_password_hash(user.password_hash, password):
+                if not user.is_verified:
+                    return jsonify({'error': 'Please verify your email before logging in'}), 401
+                
+                # Update login info
+                user.last_login_date = datetime.utcnow()
+                user.session_start_time = datetime.utcnow()
+                user.last_heartbeat = datetime.utcnow()
+                
+                if ENABLE_IP_TRACKING:
+                    user.last_ip = get_client_ip()
+                
+                # Check if new day for daily bonus reset
+                today = datetime.utcnow().date()
+                if not user.last_video_date or user.last_video_date != today:
+                    user.daily_bonus_given = False
+                    user.videos_watched_today = 0
+                    user.daily_online_time = 0
+                    user.last_video_date = today
+                
+                db.session.commit()
+                
+                # Log login IP
+                log_user_ip(user.id, "login")
+                
+                # Set session
+                session['user_id'] = user.id
+                session['account_type'] = user.account_type
+                
+                dashboard_route = 'youtuber_dashboard' if user.account_type == 'YouTuber' else 'user_dashboard'
+                return jsonify({
+                    'success': True,
+                    'redirect': url_for(dashboard_route)
+                })
+            else:
+                return jsonify({'error': 'Invalid email/username or password'}), 401
+                
+        except Exception as e:
+            print(f"❌ Login error: {str(e)}")
+            db.session.rollback()
+            return jsonify({'error': 'Login failed. Please try again.'}), 500
+    
+    return render_template('login.html')
+
+@app.route('/confirm_email/<token>')
+def confirm_email(token):
+    try:
+        email = serializer.loads(token, salt='email-confirm', max_age=3600)  # 1 hour
+        user = User.query.filter_by(email=email).first()
+        
+        if user:
+            user.is_verified = True
+            db.session.commit()
+            flash('✅ Email verified successfully! You can now log in.', 'success')
+        else:
+            flash('❌ User not found.', 'error')
+            
+    except SignatureExpired:
+        flash('⏰ Verification link has expired. Please register again.', 'error')
+    except BadSignature:
+        flash('❌ Invalid verification link.', 'error')
+    except Exception as e:
+        print(f"❌ Email confirmation error: {str(e)}")
+        flash('❌ Email verification failed.', 'error')
+    
+    return redirect(url_for('login'))           
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('home'))
+
+@app.route('/user_dashboard')
+def user_dashboard():
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    # Get recent earnings
+    recent_earnings = Earning.query.filter_by(user_id=user.id)\
+        .order_by(Earning.timestamp.desc())\
+        .limit(10).all()
+    
+    # Get available videos
+    videos = Video.query.filter_by(is_active=True)\
+        .order_by(Video.timestamp.desc()).all()
+    
+    # Check daily limits
+    can_watch_more = check_daily_video_limit(user.id)
+    time_until_daily_bonus = max(0, DAILY_ONLINE_TIME - (user.daily_online_time or 0))
+    
+    # Calculate videos remaining today
+    videos_remaining = max(0, MAX_VIDEOS_PER_DAY - (user.videos_watched_today or 0))
+    
+    return render_template('user_dashboard.html', 
+                         user=user, 
+                         earnings=recent_earnings,
+                         videos=videos,
+                         can_watch_more=can_watch_more,
+                         videos_remaining=videos_remaining,
+                         time_until_daily_bonus=time_until_daily_bonus,
+                         # Add all missing template variables
+                         MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
+                         DAILY_ONLINE_TIME=DAILY_ONLINE_TIME,
+                         DAILY_REWARD=DAILY_REWARD,
+                         SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
+                         VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
+
+# Configuration for file uploads - moved to environment variables
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads/videos')
+ALLOWED_EXTENSIONS = set(os.environ.get('ALLOWED_EXTENSIONS', 'mp4,avi,mov,wmv,flv,webm,mkv').split(','))
+MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', str(500 * 1024 * 1024)))  # Default 500MB
+VIDEO_WATCH_TIME = int(os.environ.get('VIDEO_WATCH_TIME', '30'))  # Default 30 seconds
+VIDEO_REWARD_AMOUNT = float(os.environ.get('VIDEO_REWARD_AMOUNT', '0.01'))  # Default $0.01
+DAILY_VIDEO_LIMIT = int(os.environ.get('DAILY_VIDEO_LIMIT', '50'))  # Default 50 videos per day
+MAX_FILE_SIZE_MB = int(os.environ.get('MAX_FILE_SIZE_MB', '500'))  # Default 500MB
+
+# Add to your app configuration
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+# Create upload directory if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def get_file_size_mb(file_path):
+    """Get file size in MB"""
+    try:
+        size_bytes = os.path.getsize(file_path)
+        size_mb = size_bytes / (1024 * 1024)
+        return round(size_mb, 2)
+    except:
+        return 0
+
+@app.route('/admin_panel')
+def admin_panel():
+    """Admin panel for managing videos"""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'Admin':
+        flash('❌ Admin access required!', 'error')
+        return redirect(url_for('user_dashboard'))
+    
+    # Get all videos for management
+    videos = Video.query.order_by(Video.timestamp.desc()).all()
+    
+    # Get all users for management
+    users = User.query.all()
+    
+    # Get all withdrawal requests for management
+    withdrawals = WithdrawalRequest.query.all()
+    
+    # Get IP tracking data if enabled
+    ip_logs = []
+    if ENABLE_IP_TRACKING:
+        ip_logs = IPLog.query.order_by(IPLog.timestamp.desc()).limit(100).all()
+    
+    # Get system stats
+    total_users = User.query.count()
+    total_videos = Video.query.count()
+    active_videos = Video.query.filter_by(is_active=True).count()
+    total_earnings = db.session.query(db.func.sum(User.balance_usd)).scalar() or 0
+    
+    return render_template('admin_panel.html', 
+                         videos=videos,
+                         users=users,
+                         withdrawals=withdrawals,
+                         ip_logs=ip_logs,
+                         ip_tracking_enabled=ENABLE_IP_TRACKING,
+                         total_users=total_users,
+                         total_videos=total_videos,
+                         active_videos=active_videos,
+                         total_earnings=total_earnings,
+                         max_file_size=MAX_FILE_SIZE_MB,
+                         allowed_extensions=ALLOWED_EXTENSIONS,
+                         default_watch_time=VIDEO_WATCH_TIME,
+                         default_reward=VIDEO_REWARD_AMOUNT)
+
+# Admin Video Upload Route (REPLACE YOUR EXISTING add_video ROUTE)
+@app.route('/admin_add_video', methods=['POST'])
+@limiter.limit(os.environ.get('ADMIN_UPLOAD_RATE_LIMIT', '5 per minute'))
+def admin_add_video():
+    """Admin route to add video files"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'Admin':
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+    
+    try:
+        # Get form data
+        title = request.form.get('title', '').strip()
+        min_watch_time = int(request.form.get('min_watch_time', VIDEO_WATCH_TIME))
+        reward_amount = float(request.form.get('reward_amount', VIDEO_REWARD_AMOUNT))
+        video_type = request.form.get('video_type', 'file')  # 'file' or 'youtube'
+        
+        # Validation with configurable limits
+        title_max_length = int(os.environ.get('VIDEO_TITLE_MAX_LENGTH', '200'))
+        min_watch_time_limit = int(os.environ.get('MIN_WATCH_TIME_LIMIT', '10'))
+        max_watch_time_limit = int(os.environ.get('MAX_WATCH_TIME_LIMIT', '300'))
+        min_reward_amount = float(os.environ.get('MIN_REWARD_AMOUNT', '0.001'))
+        max_reward_amount = float(os.environ.get('MAX_REWARD_AMOUNT', '1.0'))
+        
+        if not title or len(title) > title_max_length:
+            flash(f'Video title is required and must be less than {title_max_length} characters.', 'error')
+            return redirect(url_for('admin_panel'))
+        
+        if min_watch_time < min_watch_time_limit or min_watch_time > max_watch_time_limit:
+            flash(f'Watch time must be between {min_watch_time_limit} and {max_watch_time_limit} seconds.', 'error')
+            return redirect(url_for('admin_panel'))
+        
+        if reward_amount < min_reward_amount or reward_amount > max_reward_amount:
+            flash(f'Reward amount must be between ${min_reward_amount} and ${max_reward_amount}.', 'error')
+            return redirect(url_for('admin_panel'))
+        
+        video_url = None
+        video_filename = None
+        
+        if video_type == 'file':
+            # Handle file upload
+            if 'video_file' not in request.files:
+                flash('No video file selected.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            file = request.files['video_file']
+            if file.filename == '':
+                flash('No video file selected.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            if not allowed_file(file.filename):
+                flash(f'Invalid file type. Allowed types: {", ".join(ALLOWED_EXTENSIONS)}', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            # Generate unique filename
+            original_filename = secure_filename(file.filename)
+            file_extension = original_filename.rsplit('.', 1)[1].lower()
+            unique_filename = f"{uuid.uuid4().hex}.{file_extension}"
+            
+            # Save file
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(file_path)
+            
+            # Check file size
+            file_size_mb = get_file_size_mb(file_path)
+            if file_size_mb > MAX_FILE_SIZE_MB:
+                os.remove(file_path)  # Delete the file
+                flash(f'File size too large. Maximum {MAX_FILE_SIZE_MB}MB allowed.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            video_filename = unique_filename
+            video_url = f"/static/uploads/videos/{unique_filename}"
+            
+        else:  # YouTube URL
+            video_url = request.form.get('video_url', '').strip()
+            if not video_url:
+                flash('Video URL is required.', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            # Validate YouTube URL with configurable domains
+            allowed_domains = os.environ.get('ALLOWED_VIDEO_DOMAINS', 'youtube.com,youtu.be').split(',')
+            is_valid_url = any(domain in video_url for domain in allowed_domains)
+            
+            if not is_valid_url:
+                flash(f'Please provide a valid video URL from: {", ".join(allowed_domains)}', 'error')
+                return redirect(url_for('admin_panel'))
+            
+            # Check for duplicate URLs
+            existing_video = Video.query.filter_by(video_url=video_url).first()
+            if existing_video:
+                flash('This video URL has already been added.', 'warning')
+                return redirect(url_for('admin_panel'))
+        
+        # Create new video
+        new_video = Video(
+            title=title,
+            video_url=video_url,
+            video_filename=video_filename,  # Store filename for file uploads
+            video_type=video_type,  # Store type (file or youtube)
+            added_by=user.id,
+            min_watch_time=min_watch_time,
+            reward_amount=reward_amount,
+            is_active=True,
+            timestamp=datetime.utcnow()
+        )
+        
+        db.session.add(new_video)
+        db.session.commit()
+        
+        # Log the action
+        log_user_ip(user.id, "admin_video_upload")
+        
+        flash(f'Video "{title}" has been added successfully!', 'success')
+        return redirect(url_for('admin_panel'))
+        
+    except ValueError as e:
+        flash('Invalid number format in watch time or reward amount.', 'error')
+        return redirect(url_for('admin_panel'))
+    except Exception as e:
+        print(f"❌ Error adding video: {str(e)}")
+        db.session.rollback()
+        flash('An error occurred while adding the video. Please try again.', 'error')
+        return redirect(url_for('admin_panel'))
+
+# Admin Delete Video Route
+@app.route('/admin_delete_video/<int:video_id>', methods=['POST'])
+def admin_delete_video(video_id):
+    """Admin route to delete videos"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'Admin':
+        return jsonify({'success': False, 'message': 'Admin access required'}), 403
+    
+    try:
+        video = Video.query.get_or_404(video_id)
+        
+        # Delete physical file if it exists
+        if video.video_filename and video.video_type == 'file':
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], video.video_filename)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except OSError as e:
+                    print(f"Warning: Could not delete file {file_path}: {e}")
+        
+        # Delete video record
+        db.session.delete(video)
+        db.session.commit()
+        
+        flash('Video deleted successfully!', 'success')
+        return redirect(url_for('admin_panel'))
+        
+    except Exception as e:
+        print(f"❌ Error deleting video: {str(e)}")
+        db.session.rollback()
+        flash('Error deleting video.', 'error')
+        return redirect(url_for('admin_panel'))
+
+# Update your existing watch_video route to handle both file types
+@app.route('/watch_video/<int:video_id>')
+def watch_video(video_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        return redirect(url_for('login'))
+    
+    if not check_daily_video_limit(user.id):
+        flash(f'❌ Daily video limit ({DAILY_VIDEO_LIMIT}) reached. Come back tomorrow!', 'error')
+        return redirect(url_for('user_dashboard'))
+    
+    video = Video.query.get_or_404(video_id)
+    if not video.is_active:
+        flash('❌ This video is no longer available.', 'error')
+        return redirect(url_for('user_dashboard'))
+    
+    # Create watch session
+    session_token = create_session_token()
+    watch_session = WatchSession(
+        user_id=user.id,
+        video_id=video.id,
+        session_token=session_token,
+        ip_address=get_client_ip(),
+        user_agent=request.headers.get('User-Agent', 'Unknown')
+    )
+    
+    db.session.add(watch_session)
+    db.session.commit()
+    
+    return render_template('watch_video.html', 
+                         video=video, 
+                         session_token=session_token,
+                         min_watch_time=VIDEO_WATCH_TIME)
+
+# Helper function for templates
+def get_youtube_embed_url(youtube_url):
+    """Convert YouTube URL to embed URL"""
+    try:
+        if 'youtube.com/watch' in youtube_url:
+            video_id = youtube_url.split('v=')[1].split('&')[0]
+        elif 'youtu.be/' in youtube_url:
+            video_id = youtube_url.split('youtu.be/')[1].split('?')[0]
+        else:
+            return youtube_url
+        
+        return f"https://www.youtube.com/embed/{video_id}"
+    except:
+        return youtube_url
+
+# Security helper function
+# Security helper function
+def check_daily_video_limit(user_id):
+    """Check if user has exceeded daily video watch limit"""
+    from datetime import datetime, timedelta
+    
+    today = datetime.utcnow().date()
+    start_of_day = datetime.combine(today, datetime.min.time())
+    
+    # Count videos watched today
+    videos_watched_today = WatchSession.query.filter(
+        WatchSession.user_id == user_id,
+        WatchSession.start_time >= start_of_day,
+        WatchSession.reward_given == True
+    ).count()
+    
+    return videos_watched_today < DAILY_VIDEO_LIMIT
+
+# Make helper functions available in templates
+@app.context_processor
+def utility_processor():
+    return dict(
+        get_youtube_embed_url=get_youtube_embed_url,
+        get_file_size_mb=get_file_size_mb,
+        max_file_size_mb=MAX_FILE_SIZE_MB,
+        allowed_extensions=ALLOWED_EXTENSIONS,
+        video_watch_time=VIDEO_WATCH_TIME,
+        video_reward_amount=VIDEO_REWARD_AMOUNT,
+        daily_video_limit=DAILY_VIDEO_LIMIT
+    )
+
+@app.route('/api/heartbeat', methods=['POST'])
+def heartbeat():
+    """Keep track of user activity and session with enhanced anti-cheat"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    try:
+        data = request.get_json()
+        session_token = data.get('session_token')
+        session_type = data.get('type', 'video')  # 'video' or 'daily'
+        focus_lost = data.get('focus_lost', 0)
+        back_button = data.get('back_button', False)
+        
+        # Get additional anti-cheat data
+        mouse_data = data.get('mouse_data', {})
+        keyboard_data = data.get('keyboard_data', {})
+        screen_data = data.get('screen_data', {})
+        behavioral_data = data.get('behavioral_data', {})
+        
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+        
+        # Update device fingerprint if changed
+        update_device_fingerprint(user_id, screen_data, user_agent)
+        
+        # Check for proxy/VPN
+        is_proxy = detect_proxy_vpn(user_ip)
+        if is_proxy:
+            log_security_event(user_id, 'proxy_detected', 'medium', 
+                             f'Proxy/VPN detected from IP: {user_ip}')
+        
+        if session_type == 'video' and session_token:
+            watch_session = WatchSession.query.filter_by(session_token=session_token).first()
+            if watch_session and watch_session.user_id == user_id:
+                # Update basic session data
+                watch_session.focus_lost_count = focus_lost
+                watch_session.back_button_pressed = back_button
+                watch_session.watch_duration = data.get('watch_duration', 0)
+                watch_session.user_agent = user_agent
+                watch_session.ip_address = user_ip
+                
+                # Store mouse movement data for bot detection
+                if mouse_data:
+                    store_mouse_movements(watch_session.id, mouse_data)
+                
+                # Store keystroke patterns
+                if keyboard_data:
+                    store_keystroke_patterns(user_id, session_token, keyboard_data)
+                
+                # Advanced cheat detection
+                cheat_detected, cheat_reasons = advanced_cheat_detection(
+                    watch_session, mouse_data, behavioral_data, is_proxy
+                )
+                
+                if cheat_detected:
+                    watch_session.cheating_detected = True
+                    watch_session.cheat_reason = '; '.join(cheat_reasons)
+                    watch_session.is_suspicious = True
+                    
+                    # Log security event
+                    log_security_event(user_id, 'cheating_detected', 'high', 
+                                     f'Cheating detected: {"; ".join(cheat_reasons)}')
+                    
+                    # Update user risk score
+                    update_user_risk_score(user_id, cheat_reasons)
+                
+                # Calculate and store risk score
+                risk_score = calculate_session_risk_score(watch_session, mouse_data, behavioral_data)
+                store_risk_score(user_id, watch_session.id, risk_score)
+                
+                db.session.commit()
+                return jsonify({
+                    'success': True, 
+                    'cheating': watch_session.cheating_detected,
+                    'risk_level': risk_score.get('risk_level', 'low'),
+                    'suspicious': watch_session.is_suspicious
+                })
+        
+        elif session_type == 'daily':
+            # Update daily session with enhanced tracking
+            user = User.query.get(user_id)
+            user.last_heartbeat = datetime.utcnow()
+            user.last_ip_address = user_ip
+            
+            # Update geolocation data
+            update_user_geolocation(user_id, user_ip)
+            
+            # Calculate online time
+            if user.session_start_time:
+                online_time = (datetime.utcnow() - user.session_start_time).total_seconds()
+                user.daily_online_time = min(int(online_time), DAILY_ONLINE_TIME)
+            
+            # Update behavioral scores
+            update_behavioral_scores(user, behavioral_data)
+            
+            # Check for automation/bot behavior
+            if detect_automation(behavioral_data, mouse_data):
+                user.automation_detected = True
+                log_security_event(user_id, 'automation_detected', 'high', 
+                                 'Bot-like behavior detected during daily session')
+            
+            db.session.commit()
+            return jsonify({
+                'success': True, 
+                'online_time': user.daily_online_time,
+                'required_time': DAILY_ONLINE_TIME,
+                'risk_level': user.risk_level,
+                'automation_detected': user.automation_detected
+            })
+            
+        return jsonify({'error': 'Invalid session'}), 400
+        
+    except Exception as e:
+        print(f"❌ Heartbeat error: {str(e)}")
+        return jsonify({'error': 'Heartbeat failed'}), 500
+
+@app.route('/api/complete_video', methods=['POST'])
+def complete_video():
+    """Complete video watch with advanced fraud detection"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    try:
+        data = request.get_json()
+        session_token = data.get('session_token')
+        watch_duration = data.get('watch_duration', 0)
+        final_mouse_data = data.get('mouse_data', {})
+        completion_data = data.get('completion_data', {})
+        
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        
+        watch_session = WatchSession.query.filter_by(session_token=session_token).first()
+        
+        if not watch_session or watch_session.user_id != user_id:
+            return jsonify({'error': 'Invalid session'}), 400
+        
+        if watch_session.reward_given:
+            return jsonify({'error': 'Reward already claimed'}), 400
+        
+        # Complete the session
+        watch_session.end_time = datetime.utcnow()
+        watch_session.watch_duration = watch_duration
+        watch_session.is_completed = True
+        
+        # Enhanced fraud detection
+        fraud_detected, fraud_reasons = comprehensive_fraud_detection(
+            watch_session, final_mouse_data, completion_data, user_ip
+        )
+        
+        # ML-based fraud probability
+        ml_fraud_prob = calculate_ml_fraud_probability(watch_session, user_id)
+        
+        # Final risk assessment
+        final_risk = calculate_final_risk_score(watch_session, ml_fraud_prob, fraud_reasons)
+        
+        user = User.query.get(user_id)
+        
+        if fraud_detected or final_risk['risk_level'] in ['high', 'critical']:
+            watch_session.cheating_detected = True
+            watch_session.cheat_reason = '; '.join(fraud_reasons)
+            watch_session.is_suspicious = True
+            
+            # Update user fraud tracking
+            user.cheat_violations += 1
+            user.suspicious_activity_count += 1
+            user.ml_fraud_probability = ml_fraud_prob
+            user.risk_level = final_risk['risk_level']
+            user.last_risk_assessment = datetime.utcnow()
+            
+            # Log comprehensive security event
+            log_security_event(user_id, 'video_fraud_detected', 'critical', 
+                             f'Video completion fraud: {"; ".join(fraud_reasons)}',
+                             additional_data={
+                                 'session_token': session_token,
+                                 'ml_fraud_prob': ml_fraud_prob,
+                                 'final_risk': final_risk,
+                                 'watch_duration': watch_duration
+                             })
+            
+            # Progressive banning system
+            ban_result = check_progressive_ban(user)
+            if ban_result['should_ban']:
+                ban_user(user.id, ban_result['reason'])
+                db.session.commit()
+                session.clear()
+                return jsonify({
+                    'error': 'Account banned for repeated fraud attempts', 
+                    'banned': True,
+                    'reason': ban_result['reason']
+                }), 403
+            
+            db.session.commit()
+            return jsonify({
+                'error': 'Fraud detected: ' + '; '.join(fraud_reasons),
+                'violations': user.cheat_violations,
+                'risk_level': user.risk_level,
+                'ml_fraud_probability': ml_fraud_prob
+            }), 400
+        
+        # Legitimate completion - give reward
+        video = Video.query.get(watch_session.video_id)
+        
+        # Apply dynamic reward based on risk (lower risk = higher reward)
+        base_reward = video.reward_amount
+        risk_multiplier = get_risk_reward_multiplier(final_risk['risk_level'])
+        final_reward = base_reward * risk_multiplier
+        
+        user.balance_usd += final_reward
+        user.videos_watched_today += 1
+        user.total_watch_minutes += int(watch_duration // 60)
+        user.total_watch_time += int(watch_duration)
+        
+        # Update positive behavioral scores
+        update_positive_behavioral_scores(user, watch_session)
+        
+        watch_session.reward_given = True
+        
+        # Log earning with enhanced data
+        earning = Earning(
+            user_id=user.id,
+            amount=final_reward,
+            source='watch',
+            video_id=video.id
+        )
+        db.session.add(earning)
+        
+        # Store final risk score
+        store_risk_score(user_id, watch_session.id, final_risk, ml_fraud_prob)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'reward': final_reward,
+            'base_reward': base_reward,
+            'risk_multiplier': risk_multiplier,
+            'new_balance': user.balance_usd,
+            'videos_remaining': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
+            'risk_level': final_risk['risk_level'],
+            'behavioral_score': user.behavioral_score
+        })
+        
+    except Exception as e:
+        print(f"❌ Complete video error: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': 'Failed to complete video'}), 500
+
+@app.route('/api/claim_daily_bonus', methods=['POST'])
+def claim_daily_bonus():
+    """Claim daily bonus with comprehensive fraud prevention"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    try:
+        data = request.get_json()
+        behavioral_data = data.get('behavioral_data', {})
+        device_data = data.get('device_data', {})
+        
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+        
+        user = User.query.get(user_id)
+        
+        if not user or user.is_banned:
+            return jsonify({'error': 'Account unavailable'}), 403
+        
+        # Enhanced fraud detection for daily bonus
+        fraud_detected, fraud_reasons = detect_daily_bonus_fraud(
+            user, user_ip, user_agent, behavioral_data, device_data
+        )
+        
+        if fraud_detected:
+            user.suspicious_activity_count += 1
+            user.risk_level = 'high'
+            
+            log_security_event(user_id, 'daily_bonus_fraud', 'high',
+                             f'Daily bonus fraud attempt: {"; ".join(fraud_reasons)}')
+            
+            db.session.commit()
+            return jsonify({
+                'error': 'Suspicious activity detected',
+                'reasons': fraud_reasons,
+                'risk_level': user.risk_level
+            }), 400
+        
+        # Reset daily data if needed
+        user = reset_daily_data_if_needed(user)
+        
+        # Get today's date for comparison
+        today = datetime.utcnow().date()
+        
+        # Check if bonus was already claimed today
+        if user.daily_bonus_given and user.last_bonus_date == today:
+            return jsonify({'error': 'Daily bonus already claimed today'}), 400
+        
+        # Enhanced online time verification
+        verified_online_time = verify_online_time_legitimacy(user, behavioral_data)
+        
+        if verified_online_time < DAILY_ONLINE_TIME:
+            return jsonify({
+                'error': f'Insufficient verified online time: {verified_online_time}s of {DAILY_ONLINE_TIME}s required',
+                'required': DAILY_ONLINE_TIME,
+                'verified': verified_online_time,
+                'claimed': user.daily_online_time
+            }), 400
+        
+        # Calculate dynamic bonus based on user trustworthiness
+        base_bonus = DAILY_REWARD
+        trust_multiplier = calculate_trust_multiplier(user)
+        final_bonus = base_bonus * trust_multiplier
+        
+        old_balance = user.balance_usd
+        user.balance_usd = float(user.balance_usd or 0) + final_bonus
+        
+        # Update bonus tracking fields
+        user.daily_bonus_given = True
+        user.last_bonus_date = today
+        user.last_bonus_claim = datetime.utcnow()
+        user.total_daily_bonuses += 1
+        
+        # Enhanced consecutive days calculation
+        user.consecutive_days = calculate_consecutive_days(user, today)
+        
+        # Update positive behavioral indicators
+        update_positive_daily_behaviors(user, behavioral_data)
+        
+        # Log earning with enhanced tracking
+        earning = Earning(
+            user_id=user.id,
+            amount=final_bonus,
+            source='daily_bonus'
+        )
+        db.session.add(earning)
+        
+        # Update device fingerprint
+        update_device_fingerprint(user_id, device_data, user_agent)
+        
+        # Update geolocation
+        update_user_geolocation(user_id, user_ip)
+        
+        # Log legitimate daily bonus claim
+        log_security_event(user_id, 'daily_bonus_claimed', 'low',
+                         f'Legitimate daily bonus claim: ${final_bonus:.2f}',
+                         additional_data={
+                             'trust_multiplier': trust_multiplier,
+                             'verified_online_time': verified_online_time,
+                             'consecutive_days': user.consecutive_days
+                         })
+        
+        db.session.commit()
+        
+        print(f"✅ Enhanced daily bonus claimed: User {user.id}, Amount: {final_bonus}, Trust: {trust_multiplier}")
+        
+        return jsonify({
+            'success': True,
+            'bonus': final_bonus,
+            'base_bonus': base_bonus,
+            'trust_multiplier': trust_multiplier,
+            'old_balance': old_balance,
+            'new_balance': user.balance_usd,
+            'consecutive_days': user.consecutive_days,
+            'verified_online_time': verified_online_time,
+            'behavioral_score': user.behavioral_score,
+            'risk_level': user.risk_level,
+            'message': f'Daily bonus of ${final_bonus:.2f} claimed successfully!'
+        })
+        
+    except Exception as e:
+        print(f"❌ Enhanced daily bonus error: {str(e)}")
+        db.session.rollback()
+        return jsonify({'error': f'Failed to claim bonus: {str(e)}'}), 500
+
+# Helper functions for enhanced anti-cheat
+
+def update_device_fingerprint(user_id, screen_data, user_agent):
+    """Update or create device fingerprint"""
+    fingerprint_hash = generate_fingerprint_hash(screen_data, user_agent)
+    
+    fingerprint = DeviceFingerprint.query.filter_by(
+        user_id=user_id, 
+        fingerprint_hash=fingerprint_hash
+    ).first()
+    
+    if fingerprint:
+        fingerprint.last_seen = datetime.utcnow()
+        fingerprint.times_seen += 1
+    else:
+        fingerprint = DeviceFingerprint(
+            user_id=user_id,
+            fingerprint_hash=fingerprint_hash,
+            screen_resolution=screen_data.get('resolution'),
+            timezone=screen_data.get('timezone'),
+            language=screen_data.get('language'),
+            user_agent=user_agent
+        )
+        db.session.add(fingerprint)
+
+def log_security_event(user_id, event_type, severity, description, additional_data=None):
+    """Log security events for audit trail"""
+    event = SecurityEvent(
+        user_id=user_id,
+        event_type=event_type,
+        severity=severity,
+        description=description,
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent', ''),
+        additional_data=additional_data
+    )
+    db.session.add(event)
+
+def calculate_ml_fraud_probability(watch_session, user_id):
+    """Calculate ML-based fraud probability"""
+    # This would integrate with your ML model
+    # For now, return a simple heuristic-based score
+    features = extract_ml_features(watch_session, user_id)
+    return simple_fraud_heuristic(features)
+
+def check_progressive_ban(user):
+    """Progressive banning system based on violations"""
+    violations = user.cheat_violations
+    
+    if violations >= 10:
+        return {'should_ban': True, 'reason': 'Excessive fraud attempts (10+)'}
+    elif violations >= 5 and user.risk_level == 'critical':
+        return {'should_ban': True, 'reason': 'Critical risk with multiple violations'}
+    elif user.ml_fraud_probability > 0.9:
+        return {'should_ban': True, 'reason': 'ML model high fraud probability'}
+    
+    return {'should_ban': False, 'reason': None}
+
+# Add these routes to your existing app.py file
+
+@app.route('/youtuber_dashboard')
+def youtuber_dashboard():
+    """YouTuber dashboard route"""
+    if 'user_id' not in session:
+        flash('Please log in to access your dashboard.', 'error')
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        flash('Access denied. YouTuber account required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # Check if user is banned
+    if is_user_banned(user.id):
+        flash(f'Your account has been banned. Reason: {user.ban_reason}', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get user's videos
+        user_videos = Video.query.filter_by(added_by=user.id).order_by(Video.timestamp.desc()).all()
+        
+        # Calculate total watches across all user's videos
+        total_watches = db.session.query(WatchSession).join(Video).filter(
+            Video.added_by == user.id,
+            WatchSession.reward_given == True
+        ).count()
+        
+        # Calculate total revenue from user's videos
+        total_revenue = db.session.query(db.func.sum(Earning.amount)).join(Video).filter(
+            Video.added_by == user.id,
+            Earning.source == 'watch'
+        ).scalar() or 0.0
+        
+        # Count active videos
+        active_videos = Video.query.filter_by(added_by=user.id, is_active=True).count()
+        
+        # Get recent watch sessions for user's videos
+        recent_watches = db.session.query(WatchSession).join(Video).filter(
+            Video.added_by == user.id,
+            WatchSession.reward_given == True
+        ).order_by(WatchSession.start_time.desc()).limit(5).all()
+        
+        return render_template('youtuber_dashboard.html',
+                             user=user,
+                             user_videos=user_videos,
+                             total_watches=total_watches,
+                             total_revenue=total_revenue,
+                             active_videos=active_videos,
+                             recent_watches=recent_watches,
+                             VIDEO_WATCH_TIME=VIDEO_WATCH_TIME,
+                             VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
+                             
+    except Exception as e:
+        print(f"❌ Error in youtuber_dashboard: {str(e)}")
+        flash('An error occurred while loading your dashboard.', 'error')
+        return redirect(url_for('dashboard'))
+
+@app.route('/add_video', methods=['POST'])
+@limiter.limit("10 per minute")
+def add_video():
+    """Add new video route"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        # Get form data
+        title = request.form.get('title', '').strip()
+        video_url = request.form.get('video_url', '').strip()
+        min_watch_time = int(request.form.get('min_watch_time', VIDEO_WATCH_TIME))
+        reward_amount = float(request.form.get('reward_amount', VIDEO_REWARD_AMOUNT))
+        
+        # Validation
+        if not title or len(title) > 200:
+            flash('Video title is required and must be less than 200 characters.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        if not video_url:
+            flash('Video URL is required.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Validate YouTube URL
+        if 'youtube.com/watch' not in video_url and 'youtu.be/' not in video_url:
+            flash('Please provide a valid YouTube video URL.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Validate watch time and reward
+        if min_watch_time < 10 or min_watch_time > 300:
+            flash('Watch time must be between 10 and 300 seconds.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        if reward_amount < 0.001 or reward_amount > 1.0:
+            flash('Reward amount must be between $0.001 and $1.000.', 'error')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Check for duplicate URLs
+        existing_video = Video.query.filter_by(video_url=video_url).first()
+        if existing_video:
+            flash('This video URL has already been added.', 'warning')
+            return redirect(url_for('youtuber_dashboard'))
+        
+        # Create new video
+        new_video = Video(
+            title=title,
+            video_url=video_url,
+            added_by=user.id,
+            min_watch_time=min_watch_time,
+            reward_amount=reward_amount,
+            is_active=True,
+            timestamp=datetime.utcnow()
+        )
+        
+        db.session.add(new_video)
+        db.session.commit()
+        
+        # Log the action
+        log_user_ip(user.id, "video_upload")
+        
+        flash(f'Video "{title}" has been added successfully!', 'success')
+        return redirect(url_for('youtuber_dashboard'))
+        
+    except ValueError as e:
+        flash('Invalid number format in watch time or reward amount.', 'error')
+        return redirect(url_for('youtuber_dashboard'))
+    except Exception as e:
+        print(f"❌ Error adding video: {str(e)}")
+        db.session.rollback()
+        flash('An error occurred while adding the video. Please try again.', 'error')
+        return redirect(url_for('youtuber_dashboard'))
+
+@app.route('/toggle_video_status', methods=['POST'])
+@limiter.limit("20 per minute")
+def toggle_video_status():
+    """Toggle video active/inactive status"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        
+        if not video_id:
+            return jsonify({'success': False, 'message': 'Video ID is required'}), 400
+        
+        # Get the video and verify ownership
+        video = Video.query.filter_by(id=video_id, added_by=user.id).first()
+        if not video:
+            return jsonify({'success': False, 'message': 'Video not found or access denied'}), 404
+        
+        # Toggle status
+        video.is_active = not video.is_active
+        db.session.commit()
+        
+        status = 'activated' if video.is_active else 'deactivated'
+        return jsonify({
+            'success': True, 
+            'message': f'Video "{video.title}" has been {status}',
+            'new_status': video.is_active
+        })
+        
+    except Exception as e:
+        print(f"❌ Error toggling video status: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An error occurred'}), 500
+
+@app.route('/delete_video', methods=['POST'])
+@limiter.limit("10 per minute")
+def delete_video():
+    """Delete video route"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        
+        if not video_id:
+            return jsonify({'success': False, 'message': 'Video ID is required'}), 400
+        
+        # Get the video and verify ownership
+        video = Video.query.filter_by(id=video_id, added_by=user.id).first()
+        if not video:
+            return jsonify({'success': False, 'message': 'Video not found or access denied'}), 404
+        
+        video_title = video.title
+        
+        # Delete related records first (to maintain referential integrity)
+        # Delete watch sessions
+        WatchSession.query.filter_by(video_id=video.id).delete()
+        
+        # Delete earnings
+        Earning.query.filter_by(video_id=video.id).delete()
+        
+        # Delete the video
+        db.session.delete(video)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Video "{video_title}" has been deleted successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error deleting video: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An error occurred while deleting the video'}), 500
+
+@app.route('/video_analytics/<int:video_id>')
+def video_analytics(video_id):
+    """Get analytics for a specific video"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'error': 'YouTuber account required'}), 403
+    
+    try:
+        # Verify video ownership
+        video = Video.query.filter_by(id=video_id, added_by=user.id).first()
+        if not video:
+            return jsonify({'error': 'Video not found or access denied'}), 404
+        
+        # Get analytics data
+        total_views = WatchSession.query.filter_by(video_id=video.id, reward_given=True).count()
+        total_earnings = db.session.query(db.func.sum(Earning.amount)).filter_by(video_id=video.id).scalar() or 0.0
+        
+        # Get daily views for the last 30 days
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        daily_views = db.session.query(
+            db.func.date(WatchSession.start_time).label('date'),
+            db.func.count(WatchSession.id).label('views')
+        ).filter(
+            WatchSession.video_id == video.id,
+            WatchSession.reward_given == True,
+            WatchSession.start_time >= thirty_days_ago
+        ).group_by(db.func.date(WatchSession.start_time)).all()
+        
+        # Average watch time
+        avg_watch_time = db.session.query(db.func.avg(WatchSession.watch_duration)).filter_by(
+            video_id=video.id, reward_given=True
+        ).scalar() or 0
+        
+        return jsonify({
+            'video_title': video.title,
+            'total_views': total_views,
+            'total_earnings': round(total_earnings, 3),
+            'avg_watch_time': round(avg_watch_time, 1),
+            'daily_views': [{'date': str(row.date), 'views': row.views} for row in daily_views],
+            'is_active': video.is_active,
+            'reward_amount': video.reward_amount,
+            'min_watch_time': video.min_watch_time
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting video analytics: {str(e)}")
+        return jsonify({'error': 'An error occurred'}), 500
+
+@app.route('/youtuber_settings')
+def youtuber_settings():
+    """YouTuber account settings"""
+    if 'user_id' not in session:
+        flash('Please log in to access settings.', 'error')
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        flash('Access denied. YouTuber account required.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        # Get user's video statistics
+        total_videos = Video.query.filter_by(added_by=user.id).count()
+        active_videos = Video.query.filter_by(added_by=user.id, is_active=True).count()
+        
+        # Get recent IP logs
+        recent_ips = IPLog.query.filter_by(user_id=user.id).order_by(IPLog.timestamp.desc()).limit(10).all()
+        
+        return render_template('youtuber_settings.html',
+                             user=user,
+                             total_videos=total_videos,
+                             active_videos=active_videos,
+                             recent_ips=recent_ips)
+                             
+    except Exception as e:
+        print(f"❌ Error in youtuber_settings: {str(e)}")
+        flash('An error occurred while loading settings.', 'error')
+        return redirect(url_for('youtuber_dashboard'))
+
+@app.route('/bulk_video_action', methods=['POST'])
+@limiter.limit("5 per minute")
+def bulk_video_action():
+    """Bulk actions on videos (activate/deactivate multiple videos)"""
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': 'Please log in first'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.account_type != 'YouTuber':
+        return jsonify({'success': False, 'message': 'YouTuber account required'}), 403
+    
+    if is_user_banned(user.id):
+        return jsonify({'success': False, 'message': 'Your account is banned'}), 403
+    
+    try:
+        data = request.get_json()
+        video_ids = data.get('video_ids', [])
+        action = data.get('action')  # 'activate', 'deactivate', 'delete'
+        
+        if not video_ids or not action:
+            return jsonify({'success': False, 'message': 'Video IDs and action are required'}), 400
+        
+        # Verify all videos belong to the user
+        videos = Video.query.filter(Video.id.in_(video_ids), Video.added_by == user.id).all()
+        
+        if len(videos) != len(video_ids):
+            return jsonify({'success': False, 'message': 'Some videos not found or access denied'}), 404
+        
+        updated_count = 0
+        
+        if action == 'activate':
+            for video in videos:
+                video.is_active = True
+                updated_count += 1
+        elif action == 'deactivate':
+            for video in videos:
+                video.is_active = False
+                updated_count += 1
+        elif action == 'delete':
+            for video in videos:
+                # Delete related records first
+                WatchSession.query.filter_by(video_id=video.id).delete()
+                Earning.query.filter_by(video_id=video.id).delete()
+                db.session.delete(video)
+                updated_count += 1
+        else:
+            return jsonify({'success': False, 'message': 'Invalid action'}), 400
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{updated_count} videos {action}d successfully'
+        })
+        
+    except Exception as e:
+        print(f"❌ Error in bulk video action: {str(e)}")
+        db.session.rollback()
+        return jsonify({'success': False, 'message': 'An error occurred'}), 500
+
+# Helper route for video URL validation
+@app.route('/validate_video_url', methods=['POST'])
+def validate_video_url():
+    """Validate YouTube video URL"""
+    if 'user_id' not in session:
+        return jsonify({'valid': False, 'message': 'Please log in first'}), 401
+    
+    try:
+        data = request.get_json()
+        video_url = data.get('video_url', '').strip()
+        
+        if not video_url:
+            return jsonify({'valid': False, 'message': 'URL is required'})
+        
+        # Basic YouTube URL validation
+        if 'youtube.com/watch' not in video_url and 'youtu.be/' not in video_url:
+            return jsonify({'valid': False, 'message': 'Please provide a valid YouTube video URL'})
+        
+        # Check if URL already exists
+        existing_video = Video.query.filter_by(video_url=video_url).first()
+        if existing_video:
+            return jsonify({'valid': False, 'message': 'This video URL has already been added'})
+        
+        return jsonify({'valid': True, 'message': 'Valid YouTube URL'})
+        
+    except Exception as e:
+        print(f"❌ Error validating video URL: {str(e)}")
+        return jsonify({'valid': False, 'message': 'An error occurred'}), 500
+
+# Error handlers
+@app.errorhandler(404)
+def not_found(error):
+    return render_template('404.html') if os.path.exists('templates/404.html') else "Page not found", 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    return render_template('500.html') if os.path.exists('templates/500.html') else "Internal server error", 500
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({'error': 'Rate limit exceeded. Please try again later.'}), 429
+
+#==== Database Initialization ====
+
+def init_db():
+    """Initialize database tables"""
+    try:
+        with app.app_context():
+            db.create_all()
+            print("✅ Database tables created successfully!")
+            
+            # Print configuration status
+            print(f"🗄️ Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+            
+            if ENABLE_IP_TRACKING:
+                print("🔍 IP tracking is ENABLED")
+                print(f"📊 Keeping last {MAX_IP_HISTORY} IP addresses per user")
+                if TRUST_PROXY_HEADERS:
+                    print("🌐 Proxy headers (X-Forwarded-For, X-Real-IP) are trusted")
+            else:
+                print("❌ IP tracking is DISABLED")
+                
+            if MAINTENANCE_MODE:
+                print("🚧 MAINTENANCE MODE is ENABLED")
+                
+            print(f"🎁 Daily reward: ${DAILY_REWARD}")
+            print(f"💰 Min withdrawal: ${MIN_WITHDRAW_AMOUNT}")
+                
+    except Exception as e:
+        print(f"❌ Database initialization failed: {str(e)}")
+
+#==== Run App ====
+#The above is what ive just added
 
 @app.route('/edit_profile')
 def edit_profile():
@@ -944,144 +2516,7 @@ def profile():
 
     return render_template('profile.html', user=user)
 
-@app.route('/verify/<token>') 
-def confirm_email(token): 
-    try: 
-        email = serializer.loads(token, salt='email-confirm', max_age=3600) 
-    except SignatureExpired: 
-        return '''
-        <div style="text-align: center; padding: 50px; font-family: Arial;">
-            <h2>⏰ Verification Link Expired</h2>
-            <p>Your verification link has expired for security reasons.</p>
-            <p><a href="/resend-verification" style="color: #4CAF50;">Request a new verification email</a></p>
-            <p><a href="/login" style="color: #2196F3;">Back to Login</a></p>
-        </div>
-        ''', 400 
-    except BadSignature: 
-        return '''
-        <div style="text-align: center; padding: 50px; font-family: Arial;">
-            <h2>❌ Invalid Verification Link</h2>
-            <p>This verification link is invalid or has been tampered with.</p>
-            <p><a href="/register" style="color: #4CAF50;">Create New Account</a></p>
-            <p><a href="/login" style="color: #2196F3;">Back to Login</a></p>
-        </div>
-        ''', 400
-
-    user = User.query.filter_by(email=email).first()
-    if user:
-        if user.is_verified:
-            return '''
-            <div style="text-align: center; padding: 50px; font-family: Arial;">
-                <h2>✅ Already Verified</h2>
-                <p>Your email has already been verified!</p>
-                <p><a href="/login" style="color: #4CAF50; padding: 10px 20px; background: #f0f0f0; text-decoration: none; border-radius: 5px;">Login to Your Account</a></p>
-            </div>
-            ''', 200
-        else:
-            user.is_verified = True
-            db.session.commit()
-            
-            # Log email verification
-            log_user_ip(user.id, "email_verify")
-            
-            return '''
-            <div style="text-align: center; padding: 50px; font-family: Arial;">
-                <h2>🎉 Email Verified Successfully!</h2>
-                <p>Welcome to Watch & Earn! Your account is now active.</p>
-                <p>You can now start watching videos and earning money!</p>
-                <p><a href="/login" style="color: white; padding: 15px 30px; background: #4CAF50; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 20px;">🚀 Start Earning Now</a></p>
-            </div>
-            ''', 200
-    return '''
-    <div style="text-align: center; padding: 50px; font-family: Arial;">
-        <h2>❌ User Not Found</h2>
-        <p>We couldn't find an account associated with this verification link.</p>
-        <p><a href="/register" style="color: #4CAF50;">Create New Account</a></p>
-    </div>
-    ''', 404
-
-@app.route('/login', methods=['GET', 'POST']) 
-@limiter.limit(LOGIN_RATE_LIMIT) 
-def login(): 
-    if request.method == 'POST': 
-        try:
-            # Get form data
-            email = request.form.get('email')
-            password = request.form.get('password')
-            
-            # Validate input
-            if not email or not password:
-                return jsonify({'error': 'Email and password are required'}), 400
-            
-            # Find user
-            user = User.query.filter_by(email=email).first()
-            if not user: 
-                return jsonify({'error': 'Invalid email or password'}), 401
-            
-            # Check password
-            if not check_password_hash(user.password_hash, password): 
-                return jsonify({'error': 'Invalid email or password'}), 401
-            
-            # Check if email is verified
-            if not user.is_verified: 
-                return jsonify({
-                    'error': 'Please verify your email first.',
-                    'needs_verification': True
-                }), 403
-            
-            # Update IP tracking (with error handling)
-            try:
-                current_ip = get_client_ip()
-                if ENABLE_IP_TRACKING:
-                    user.last_ip = current_ip
-                    log_user_ip(user.id, "login")
-            except Exception as ip_error:
-                print(f"⚠️ IP tracking failed: {str(ip_error)}")
-                # Continue with login even if IP tracking fails
-            
-            # Set session data
-            session.permanent = True  # Make session permanent
-            session['user_id'] = user.id
-            session['account_type'] = user.account_type
-            session['email'] = user.email
-            
-            # Update last login (with error handling)
-            try:
-                user.last_login_date = datetime.utcnow()
-                db.session.commit()
-            except Exception as db_error:
-                print(f"⚠️ Database update failed: {str(db_error)}")
-                db.session.rollback()
-                # Don't fail login if just the timestamp update fails
-            
-            # Return success response with redirect URL
-            dashboard_url = url_for('youtuber_dashboard') if user.account_type == 'YouTuber' else url_for('user_dashboard')
-            
-            return jsonify({
-                'success': True,
-                'message': 'Login successful!',
-                'redirect': dashboard_url,
-                'user': {
-                    'id': user.id,
-                    'email': user.email,
-                    'account_type': user.account_type
-                }
-            }), 200
-            
-        except Exception as e:
-            print(f"❌ Login error: {str(e)}")
-            db.session.rollback()
-            return jsonify({'error': 'An internal error occurred. Please try again.'}), 500
-
-    return render_template('login.html')
-
-# This integrates with your existing Flask app structure
-# No need to redefine imports or mail config since you already have them
-
-# Replace your existing forgot password routes with these fixed versions:
-
 # Fixed forgot password route - replace your existing one
-
 @app.route('/forgot_password', methods=['GET', 'POST'])
 def forgot_password():
     """Handle both display and submission of forgot password form"""
@@ -1310,18 +2745,6 @@ def switch_account_type():
         db.session.rollback()
         return jsonify({'error': 'Failed to switch account type. Please try again.'}), 500
 
-@app.route('/user_dashboard') 
-def user_dashboard(): 
-    if session.get('account_type') != 'User': 
-        return 'Access denied', 403 
-    return render_template('user_dashboard.html')
-
-@app.route('/youtuber_dashboard') 
-def youtuber_dashboard(): 
-    if session.get('account_type') != 'YouTuber': 
-        return 'Access denied', 403 
-    return render_template('youtuber_dashboard.html')
-
 @app.route('/watch', methods=['POST']) 
 def track_watch(): 
     if not ENABLE_REWARDS: 
@@ -1379,24 +2802,6 @@ def withdraw():
         
         return jsonify({'message': 'Withdrawal request submitted'}) 
     return jsonify({'error': f'Minimum withdrawal is ${MIN_WITHDRAW_AMOUNT} or insufficient balance'})
-
-@app.route('/admin/panel') 
-def admin_panel(): 
-    users = User.query.all() 
-    withdrawals = WithdrawalRequest.query.all() 
-    videos = Video.query.all() 
-    
-    # Get IP tracking data if enabled
-    ip_logs = []
-    if ENABLE_IP_TRACKING:
-        ip_logs = IPLog.query.order_by(IPLog.timestamp.desc()).limit(100).all()
-    
-    return render_template('admin_panel.html', 
-                         users=users, 
-                         withdrawals=withdrawals, 
-                         videos=videos,
-                         ip_logs=ip_logs,
-                         ip_tracking_enabled=ENABLE_IP_TRACKING)
 
 @app.route('/admin/user-ips/<int:user_id>')
 def get_user_ip_history(user_id):
@@ -1491,35 +2896,7 @@ def upload_success(video_id=None):
     }
     
     return render_template('upload_success.html', **template_data)
-
-@app.route('/logout')
-def logout():
-    """Logout user and clear session"""
-    user_id = session.get('user_id')
-    if user_id:
-        # Log logout
-        log_user_ip(user_id, "logout")
-    
-    session.clear()
-    return redirect(url_for('home'))
-
-#==== Database Initialization ====
-
-def init_db():
-    """Initialize database tables"""
-    with app.app_context():
-        db.create_all()
-        print("✅ Database tables created successfully!")
-        
-        # Print IP tracking status
-        if ENABLE_IP_TRACKING:
-            print("🔍 IP tracking is ENABLED")
-            print(f"📊 Keeping last {MAX_IP_HISTORY} IP addresses per user")
-            if TRUST_PROXY_HEADERS:
-                print("🌐 Proxy headers (X-Forwarded-For, X-Real-IP) are trusted")
-        else:
-            print("❌ IP tracking is DISABLED")
-
+   
 @app.route('/rules_popup')
 def rules_popup():
     return render_template('rules_popup.html')  # or your actual template
@@ -1527,70 +2904,6 @@ def rules_popup():
 @app.route('/terms')
 def terms():
     return render_template('terms.html')
-
-@app.route('/debug-scan')
-def debug_scan():
-    import os, sys, traceback
-    from flask import jsonify
-
-    debug_result = {}
-    try:
-        # ✅ Check session data
-        debug_result['🧠 Session'] = dict(session)
-
-        # ✅ Check routes
-        debug_result['🧭 Registered Routes'] = list(app.view_functions.keys())
-
-        # ✅ Check template rendering
-        templates_to_test = [
-            'login.html', 'register.html',
-            'user_dashboard.html', 'youtuber_dashboard.html',
-            'withdraw.html', 'rules.html'
-        ]
-        missing_templates = []
-        for t in templates_to_test:
-            try:
-                render_template(t)
-            except Exception:
-                missing_templates.append(t)
-        debug_result['📄 Missing Templates'] = missing_templates
-
-        # ✅ Check user table and record count
-        try:
-            user_count = db.session.query(User).count()
-        except Exception:
-            user_count = '❌ Could not access User table (maybe not defined or DB error?)'
-        debug_result['👥 User Count'] = user_count
-
-        # ✅ App config checks
-        debug_result['⚙️ Config'] = {
-            'DEBUG': app.config.get('DEBUG'),
-            'ENV': app.config.get('ENV'),
-            'SECRET_KEY set': bool(app.config.get('SECRET_KEY')),
-            'SQLALCHEMY_DATABASE_URI': str(app.config.get('SQLALCHEMY_DATABASE_URI', 'Not Set'))[:50] + '...'
-        }
-
-        # ✅ Test fake register and login form simulation
-        debug_result['🧪 Form Endpoints'] = {}
-        try:
-            # Simulate rendering login
-            login_page = render_template('login.html')
-            register_page = render_template('register.html')
-            debug_result['🧪 Form Endpoints']['login.html rendered'] = '✅ OK' if login_page else '⚠️ Empty'
-            debug_result['🧪 Form Endpoints']['register.html rendered'] = '✅ OK' if register_page else '⚠️ Empty'
-        except Exception as e:
-            debug_result['🧪 Form Endpoints']['error'] = f"❌ {str(e)}"
-
-        # ✅ Render environment basics
-        debug_result['📦 Environment'] = {
-            'Python Version': sys.version,
-            'Current Path': os.getcwd()
-        }
-
-        return jsonify(debug_result)
-
-    except Exception as e:
-        return f"<h2>❌ Debug Crash</h2><pre>{traceback.format_exc()}</pre>", 500
 
 #==== Run App ====
 
