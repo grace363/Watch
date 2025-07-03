@@ -234,7 +234,16 @@ class User(db.Model):
     phone = db.Column(db.String(20))
     last_bonus_date = db.Column(db.Date)
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
-        
+    suspicious_activity_count = db.Column(db.Integer, default=0)
+    behavioral_score = db.Column(db.Integer, default=100)
+    risk_level = db.Column(db.String(20), default='low')
+    balance_request_count = db.Column(db.Integer, default=0)
+    daily_bonus_attempts = db.Column(db.Integer, default=0)
+    total_videos_watched = db.Column(db.Integer, default=0)
+    last_balance_request = db.Column(db.DateTime)
+    total_daily_bonuses = db.Column(db.Integer, default=0)
+    last_bonus_claim = db.Column(db.DateTime)
+    
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
     last_video_date = db.Column(db.Date)
