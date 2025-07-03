@@ -449,6 +449,13 @@
         input[name="csrf_token"] {
             display: none;
         }
+
+        /* Pulse animation */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body>
@@ -660,7 +667,7 @@
         // Session heartbeat and timer management
         let onlineStartTime = Date.now();
         let currentOnlineTime = {{ user.daily_online_time or 0 }};
-        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }}; // Ensures default 60 seconds
+        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }};
         const sessionHeartbeatInterval = {{ SESSION_HEARTBEAT_INTERVAL or 5 }} * 1000;
         
         let focusLostCount = 0;
@@ -677,146 +684,186 @@
         });
 
         // Prevent back button (basic deterrent)
-        window.addEventListener('beforeunload', function(e) {
-            // Only warn if user is in middle of watching
-            if (window.location.pathname.includes('/watch_video/')) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
+        window.addEventListener('popstate', function(event) {
+            history.pushState(null, null, window.location.pathname);
         });
 
-        // Update online timer display
-        function updateTimer() {
-            // Only increment if window is focused AND we haven't reached the required time yet
-            if (windowFocused && currentOnlineTime < requiredTime) {
-                currentOnlineTime++;
-                document.getElementById('timeDisplay').textContent = currentOnlineTime + 's';
-                
-                const progress = Math.min((currentOnlineTime / requiredTime) * 100, 100);
-                document.getElementById('timeProgress').style.width = progress + '%';
-                
-                // Enable claim button when time requirement is met
-                const claimBtn = document.getElementById('claimBonusBtn');
-                if (claimBtn && currentOnlineTime >= requiredTime) {
-                    claimBtn.disabled = false;
-                }
+        // Initialize on page load
+        history.pushState(null, null, window.location.pathname);
+
+        // Update timer display
+        function updateTimerDisplay() {
+            const timeDisplay = document.getElementById('timeDisplay');
+            const timeProgress = document.getElementById('timeProgress');
+            const claimBtn = document.getElementById('claimBonusBtn');
+            
+            if (timeDisplay) {
+                timeDisplay.textContent = currentOnlineTime + 's';
             }
-            // If we've reached the required time, ensure display shows the max time
-            else if (currentOnlineTime >= requiredTime) {
-                document.getElementById('timeDisplay').textContent = requiredTime + 's';
-                document.getElementById('timeProgress').style.width = '100%';
+            
+            if (timeProgress) {
+                const progressPercent = Math.min((currentOnlineTime / requiredTime) * 100, 100);
+                timeProgress.style.width = progressPercent + '%';
+            }
+            
+            if (claimBtn && currentOnlineTime >= requiredTime) {
+                claimBtn.disabled = false;
+                claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
             }
         }
 
-        // FIXED: Function to claim daily bonus - Uses correct endpoint
-        function claimDailyBonus() {
-            const claimBtn = document.getElementById('claimBonusBtn');
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        // Send heartbeat to server
+        function sendHeartbeat() {
+            if (!windowFocused) return; // Don't count time when window is not focused
             
-            if (claimBtn.disabled && currentOnlineTime < requiredTime) {
-                alert('You need to stay online for the required time first!');
-                return;
-            }
-            
-            // Disable button to prevent double clicks
-            claimBtn.disabled = true;
-            claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
-            
-            // FIXED: Use the correct endpoint that properly handles daily bonus logic
-            fetch('/api/claim_daily_bonus', {
+            fetch('/heartbeat', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
                 },
-                credentials: 'same-origin'
+                body: JSON.stringify({
+                    focus_lost_count: focusLostCount,
+                    window_focused: windowFocused
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // Success - show new balance and reload page
-                    alert(`Daily bonus of $${data.bonus.toFixed(2)} claimed successfully! New balance: $${data.new_balance.toFixed(2)}`);
+                    currentOnlineTime = data.online_time;
+                    updateTimerDisplay();
                     
-                    // Update balance displays immediately
-                    document.querySelector('.balance-display').textContent = '$' + data.new_balance.toFixed(2);
-                    document.querySelector('.balance-amount').textContent = '$' + data.new_balance.toFixed(2);
+                    // Auto-enable claim button when requirement is met
+                    if (data.can_claim) {
+                        const claimBtn = document.getElementById('claimBonusBtn');
+                        if (claimBtn) {
+                            claimBtn.disabled = false;
+                            claimBtn.style.animation = 'pulse 2s infinite';
+                        }
+                    }
+                } else {
+                    console.error('Heartbeat failed:', data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Heartbeat error:', error);
+            });
+        }
+
+        // Start heartbeat interval
+        setInterval(sendHeartbeat, sessionHeartbeatInterval);
+
+        // Send initial heartbeat
+        sendHeartbeat();
+
+        // Update display every second
+        setInterval(function() {
+            if (windowFocused) {
+                currentOnlineTime += 1;
+                updateTimerDisplay();
+            }
+        }, 1000);
+
+        // Claim daily bonus function
+        function claimDailyBonus() {
+            const claimBtn = document.getElementById('claimBonusBtn');
+            if (claimBtn) {
+                claimBtn.disabled = true;
+                claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+            }
+            
+            fetch('/api/claim_daily_bonus', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    showAlert('success', `Daily bonus of $${data.bonus.toFixed(2)} claimed successfully! 🎉`);
                     
-                    // Remove bonus section after successful claim
-                    document.querySelector('.bonus-section').style.display = 'none';
+                    // Update balance display
+                    const balanceElements = document.querySelectorAll('.balance-display, .balance-amount');
+                    balanceElements.forEach(el => {
+                        el.textContent = `$${data.new_balance.toFixed(2)}`;
+                    });
                     
-                    // Optional: Reload page to reflect all changes
+                    // Hide bonus section
+                    const bonusSection = document.querySelector('.bonus-section');
+                    if (bonusSection) {
+                        bonusSection.style.display = 'none';
+                    }
+                    
+                    // Refresh page after 2 seconds
                     setTimeout(() => {
                         window.location.reload();
                     }, 2000);
-                    
-                } else if (data.error) {
-                    // Handle specific error cases
-                    if (data.error.includes('already claimed')) {
-                        alert('You have already claimed your daily bonus today. Come back tomorrow!');
-                        window.location.reload();
-                    } else if (data.error.includes('Need to stay online')) {
-                        alert(`Please stay online longer. Required: ${data.required}s, Current: ${data.current}s`);
-                        claimBtn.disabled = false;
-                        claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
-                    } else {
-                        alert('Error: ' + data.error);
+                } else {
+                    showAlert('error', data.error || 'Failed to claim bonus');
+                    if (claimBtn) {
                         claimBtn.disabled = false;
                         claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
                     }
                 }
             })
             .catch(error => {
-                console.error('Error claiming daily bonus:', error);
-                alert('There was an error claiming your daily bonus. Please try again.');
-                claimBtn.disabled = false;
-                claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                console.error('Claim bonus error:', error);
+                showAlert('error', 'Network error. Please try again.');
+                if (claimBtn) {
+                    claimBtn.disabled = false;
+                    claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                }
             });
         }
 
-        // Send heartbeat to server every few seconds
-        function sendHeartbeat() {
-            if (windowFocused) {
-                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-                
-                fetch('/heartbeat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({
-                        online_time: currentOnlineTime,
-                        focus_lost_count: focusLostCount,
-                        page: 'dashboard'
-                    }),
-                    credentials: 'same-origin'
-                })
-                .catch(error => console.error('Heartbeat error:', error));
-            }
+        // Show alert function
+        function showAlert(type, message) {
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            
+            const mainContent = document.querySelector('.main-content');
+            mainContent.insertBefore(alert, mainContent.firstChild);
+            
+            // Auto-remove alert after 5 seconds
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
         }
 
-        // Start timers
-        setInterval(updateTimer, 1000); // Update every second
-        setInterval(sendHeartbeat, sessionHeartbeatInterval); // Send heartbeat every 5 seconds
+        // Initialize timer display
+        updateTimerDisplay();
 
-        // Initial heartbeat
-        sendHeartbeat();
+        // Handle visibility change for more accurate tracking
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                windowFocused = false;
+                focusLostCount++;
+            } else {
+                windowFocused = true;
+            }
+        });
 
-        // Auto-refresh balance every 30 seconds
-        setInterval(function() {
-            fetch('/api/balance', {
-                method: 'GET',
-                credentials: 'same-origin'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.balance !== undefined) {
-                    document.querySelector('.balance-display').textContent = '$' + data.balance.toFixed(2);
-                    document.querySelector('.balance-amount').textContent = '$' + data.balance.toFixed(2);
-                }
-            })
-            .catch(error => console.error('Balance update error:', error));
-        }, 30000);
+        // Prevent common cheating attempts
+        document.addEventListener('keydown', function(e) {
+            // Prevent F12, Ctrl+Shift+I, Ctrl+U
+            if (e.keyCode === 123 || (e.ctrlKey && e.shiftKey && e.keyCode === 73) || (e.ctrlKey && e.keyCode === 85)) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // Prevent right-click context menu
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        });
+
+        // Console warning
+        console.warn('🚨 WARNING: This application monitors user activity. Attempting to manipulate timers or bypass security measures may result in account suspension.');
     </script>
 </body>
 </html>
