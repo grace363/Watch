@@ -2166,126 +2166,220 @@ def claim_daily_bonus():
         # Calculate dynamic bonus based on user trustworthiness
         base_bonus = DAILY_REWARD
         trust_multiplier = calculate_trust_multiplier(user)
-        final_bonus = base_bonus * trust_multiplier
         
-        old_balance = user.balance_usd
-        user.balance_usd = float(user.balance_usd or 0) + final_bonus
+        # Calculate consecutive days bonus
+        consecutive_bonus = 0
+        if user.last_bonus_date:
+            # Check if claimed yesterday
+            yesterday = today - timedelta(days=1)
+            if user.last_bonus_date == yesterday:
+                user.consecutive_days += 1
+            else:
+                user.consecutive_days = 1
+        else:
+            user.consecutive_days = 1
         
-        # Update bonus tracking fields
+        # Add consecutive days bonus (up to 7 days)
+        consecutive_bonus = min(user.consecutive_days - 1, 6) * 0.1 * base_bonus
+        
+        # Calculate final bonus amount
+        final_bonus = (base_bonus + consecutive_bonus) * trust_multiplier
+        final_bonus = round(final_bonus, 2)
+        
+        # Update user balance and bonus status
+        user.balance_usd = (user.balance_usd or 0) + final_bonus
         user.daily_bonus_given = True
         user.last_bonus_date = today
         user.last_bonus_claim = datetime.utcnow()
-        user.total_daily_bonuses += 1
+        user.total_daily_bonuses = (user.total_daily_bonuses or 0) + 1
         
-        # Enhanced consecutive days calculation
-        user.consecutive_days = calculate_consecutive_days(user, today)
+        # Reset daily tracking
+        user.daily_online_time = 0
+        user.session_start_time = None
         
-        # Update positive behavioral indicators
-        update_positive_daily_behaviors(user, behavioral_data)
-        
-        # Log earning with enhanced tracking
+        # Create earning record
         earning = Earning(
-            user_id=user.id,
+            user_id=user_id,
             amount=final_bonus,
-            source='daily_bonus'
+            source='daily_bonus',
+            description=f'Daily bonus (Day {user.consecutive_days})',
+            ip_address=user_ip,
+            user_agent=user_agent,
+            created_at=datetime.utcnow()
         )
         db.session.add(earning)
         
-        # Update device fingerprint
-        update_device_fingerprint(user_id, device_data, user_agent)
-        
-        # Update geolocation
-        update_user_geolocation(user_id, user_ip)
-        
-        # Log legitimate daily bonus claim
-        log_security_event(user_id, 'daily_bonus_claimed', 'low',
-                         f'Legitimate daily bonus claim: ${final_bonus:.2f}',
+        # Log successful bonus claim
+        log_security_event(user_id, 'daily_bonus_claimed', 'info',
+                         f'Daily bonus claimed: ${final_bonus:.2f}',
                          additional_data={
+                             'base_bonus': base_bonus,
+                             'consecutive_bonus': consecutive_bonus,
                              'trust_multiplier': trust_multiplier,
-                             'verified_online_time': verified_online_time,
-                             'consecutive_days': user.consecutive_days
+                             'consecutive_days': user.consecutive_days,
+                             'new_balance': user.balance_usd
                          })
         
+        # Commit all changes
         db.session.commit()
         
-        print(f"✅ Enhanced daily bonus claimed: User {user.id}, Amount: {final_bonus}, Trust: {trust_multiplier}")
+        print(f"✅ Daily bonus claimed: User {user_id}, Amount: ${final_bonus:.2f}, New Balance: ${user.balance_usd:.2f}")
         
         return jsonify({
             'success': True,
-            'bonus': final_bonus,
-            'base_bonus': base_bonus,
-            'trust_multiplier': trust_multiplier,
-            'old_balance': old_balance,
+            'message': 'Daily bonus claimed successfully!',
+            'bonus_amount': final_bonus,
             'new_balance': user.balance_usd,
             'consecutive_days': user.consecutive_days,
-            'verified_online_time': verified_online_time,
-            'behavioral_score': user.behavioral_score,
-            'risk_level': user.risk_level,
-            'message': f'Daily bonus of ${final_bonus:.2f} claimed successfully!'
-        })
+            'bonus_breakdown': {
+                'base_bonus': base_bonus,
+                'consecutive_bonus': consecutive_bonus,
+                'trust_multiplier': trust_multiplier,
+                'final_amount': final_bonus
+            },
+            'next_bonus_available': (today + timedelta(days=1)).isoformat()
+        }), 200
         
     except Exception as e:
-        print(f"❌ Enhanced daily bonus error: {str(e)}")
+        print(f"❌ Daily bonus claim error: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': f'Failed to claim bonus: {str(e)}'}), 500
+        
+        # Log the error
+        try:
+            log_security_event(session.get('user_id'), 'daily_bonus_error', 'high',
+                             f'Daily bonus claim error: {str(e)}')
+        except:
+            pass
+        
+        return jsonify({
+            'error': 'Failed to claim daily bonus',
+            'success': False,
+            'message': 'An error occurred while claiming your bonus. Please try again.'
+        }), 500
 
-# Helper functions for enhanced anti-cheat
 
-def update_device_fingerprint(user_id, screen_data, user_agent):
-    """Update or create device fingerprint"""
-    fingerprint_hash = generate_fingerprint_hash(screen_data, user_agent)
+# Helper functions you'll need to implement:
+
+def calculate_trust_multiplier(user):
+    """Calculate trust multiplier based on user behavior"""
+    try:
+        base_multiplier = 1.0
+        
+        # Reduce multiplier for high-risk users
+        if user.risk_level == 'high':
+            base_multiplier *= 0.5
+        elif user.risk_level == 'medium':
+            base_multiplier *= 0.8
+        
+        # Increase multiplier for trusted users
+        if user.cheat_violations == 0 and user.consecutive_days > 7:
+            base_multiplier *= 1.2
+        
+        # Account age bonus
+        if user.created_at:
+            days_old = (datetime.utcnow() - user.created_at).days
+            if days_old > 30:
+                base_multiplier *= 1.1
+        
+        return min(base_multiplier, 2.0)  # Cap at 2x
+    except:
+        return 1.0
+
+def detect_daily_bonus_fraud(user, ip_address, user_agent, behavioral_data, device_data):
+    """Detect potential fraud in daily bonus claims"""
+    fraud_reasons = []
     
-    fingerprint = DeviceFingerprint.query.filter_by(
-        user_id=user_id, 
-        fingerprint_hash=fingerprint_hash
-    ).first()
-    
-    if fingerprint:
-        fingerprint.last_seen = datetime.utcnow()
-        fingerprint.times_seen += 1
-    else:
-        fingerprint = DeviceFingerprint(
-            user_id=user_id,
-            fingerprint_hash=fingerprint_hash,
-            screen_resolution=screen_data.get('resolution'),
-            timezone=screen_data.get('timezone'),
-            language=screen_data.get('language'),
-            user_agent=user_agent
-        )
-        db.session.add(fingerprint)
+    try:
+        # Check for rapid consecutive claims
+        if user.last_bonus_claim:
+            time_since_last = (datetime.utcnow() - user.last_bonus_claim).total_seconds()
+            if time_since_last < 3600:  # Less than 1 hour
+                fraud_reasons.append('Too soon since last claim')
+        
+        # Check for suspicious IP changes
+        if user.last_ip_address and user.last_ip_address != ip_address:
+            fraud_reasons.append('IP address changed')
+        
+        # Check behavioral patterns
+        if behavioral_data.get('mouse_movements', 0) < 10:
+            fraud_reasons.append('Insufficient mouse activity')
+        
+        if behavioral_data.get('click_count', 0) < 5:
+            fraud_reasons.append('Insufficient click activity')
+        
+        # Check for automation
+        if user.automation_detected:
+            fraud_reasons.append('Automation detected')
+        
+        # Check risk level
+        if user.risk_level == 'high':
+            fraud_reasons.append('High risk account')
+        
+        return len(fraud_reasons) > 0, fraud_reasons
+    except:
+        return False, []
 
-def log_security_event(user_id, event_type, severity, description, additional_data=None):
-    """Log security events for audit trail"""
-    event = SecurityEvent(
-        user_id=user_id,
-        event_type=event_type,
-        severity=severity,
-        description=description,
-        ip_address=request.remote_addr,
-        user_agent=request.headers.get('User-Agent', ''),
-        additional_data=additional_data
-    )
-    db.session.add(event)
+def verify_online_time_legitimacy(user, behavioral_data):
+    """Verify that claimed online time is legitimate"""
+    try:
+        claimed_time = user.daily_online_time or 0
+        
+        # Check if behavioral data supports claimed time
+        mouse_movements = behavioral_data.get('mouse_movements', 0)
+        click_count = behavioral_data.get('click_count', 0)
+        
+        # Minimum activity thresholds
+        min_mouse_per_minute = 2
+        min_clicks_per_minute = 1
+        
+        expected_minutes = claimed_time / 60
+        expected_mouse = expected_minutes * min_mouse_per_minute
+        expected_clicks = expected_minutes * min_clicks_per_minute
+        
+        # If activity is too low, reduce verified time
+        if mouse_movements < expected_mouse * 0.5 or click_count < expected_clicks * 0.5:
+            return int(claimed_time * 0.5)  # Reduce by 50%
+        
+        return claimed_time
+    except:
+        return user.daily_online_time or 0
 
-def calculate_ml_fraud_probability(watch_session, user_id):
-    """Calculate ML-based fraud probability"""
-    # This would integrate with your ML model
-    # For now, return a simple heuristic-based score
-    features = extract_ml_features(watch_session, user_id)
-    return simple_fraud_heuristic(features)
+def reset_daily_data_if_needed(user):
+    """Reset daily data if it's a new day"""
+    try:
+        today = datetime.utcnow().date()
+        
+        # If last activity was yesterday or earlier, reset daily data
+        if user.last_activity_date != today:
+            user.daily_online_time = 0
+            user.daily_bonus_given = False
+            user.videos_watched_today = 0
+            user.session_start_time = None
+            user.last_activity_date = today
+            user.focus_lost_count = 0
+            user.back_button_pressed = False
+        
+        return user
+    except:
+        return user
 
-def check_progressive_ban(user):
-    """Progressive banning system based on violations"""
-    violations = user.cheat_violations
+# You'll also need an Earning model if you don't have one:
+class Earning(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(50), nullable=False)  # 'daily_bonus', 'video_watch', etc.
+    description = db.Column(db.String(200))
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    if violations >= 10:
-        return {'should_ban': True, 'reason': 'Excessive fraud attempts (10+)'}
-    elif violations >= 5 and user.risk_level == 'critical':
-        return {'should_ban': True, 'reason': 'Critical risk with multiple violations'}
-    elif user.ml_fraud_probability > 0.9:
-        return {'should_ban': True, 'reason': 'ML model high fraud probability'}
-    
-    return {'should_ban': False, 'reason': None}
+    # Relationship
+    user = db.relationship('User', backref='earnings')
+
+# Constants you'll need to define:
+DAILY_REWARD = 0.50  # $0.50 base daily reward
+DAILY_ONLINE_TIME = 3600  # 1 hour in seconds
 
 # Add these routes to your existing app.py file
 
