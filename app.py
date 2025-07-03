@@ -24,15 +24,132 @@ import hashlib
 import time
 from functools import wraps
 
+# Initialize Flask app
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-here')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///watch_earn.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-DAILY_ONLINE_TIME = 60  # seconds
-DAILY_REWARD = 0.05     # dollars
-SESSION_HEARTBEAT_INTERVAL = 5  # seconds
+# Initialize extensions
+db = SQLAlchemy(app)
+csrf = CSRFProtect(app)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# App Constants
 MAX_VIDEOS_PER_DAY = 50
+DAILY_REWARD = 0.05
+DAILY_ONLINE_TIME = 60  # seconds
+SESSION_HEARTBEAT_INTERVAL = 5  # seconds
+VIDEO_WATCH_REWARD = 0.01
+MIN_WATCH_TIME = 30  # seconds
+
+# Database Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    balance_usd = db.Column(db.Float, default=0.0)
+    videos_watched_today = db.Column(db.Integer, default=0)
+    total_watch_minutes = db.Column(db.Float, default=0.0)
+    daily_bonus_given = db.Column(db.Boolean, default=False)
+    daily_online_time = db.Column(db.Integer, default=0)
+    last_daily_reset = db.Column(db.Date, default=datetime.utcnow().date)
+    account_type = db.Column(db.String(20), default='Viewer')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_active = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def reset_daily_stats(self):
+        """Reset daily stats if it's a new day"""
+        today = datetime.utcnow().date()
+        if self.last_daily_reset != today:
+            self.videos_watched_today = 0
+            self.daily_bonus_given = False
+            self.daily_online_time = 0
+            self.last_daily_reset = today
+            db.session.commit()
+
+class Video(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    url = db.Column(db.String(500), nullable=False)
+    reward_amount = db.Column(db.Float, default=VIDEO_WATCH_REWARD)
+    min_watch_time = db.Column(db.Integer, default=MIN_WATCH_TIME)
+    added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    creator = db.relationship('User', backref='videos')
+
+class WatchHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    watch_time = db.Column(db.Integer, default=0)  # in seconds
+    reward_earned = db.Column(db.Float, default=0.0)
+    completed = db.Column(db.Boolean, default=False)
+    watched_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='watch_history')
+    video = db.relationship('Video', backref='watch_history')
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    transaction_type = db.Column(db.String(50), nullable=False)  # 'video_watch', 'daily_bonus', 'withdrawal'
+    description = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref='transactions')
+
+# Helper Functions
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def get_current_user():
+    if 'user_id' in session:
+        user = User.query.get(session['user_id'])
+        if user:
+            user.reset_daily_stats()
+            return user
+    return None
+
+def can_watch_more_videos(user):
+    """Check if user can watch more videos today"""
+    return user.videos_watched_today < MAX_VIDEOS_PER_DAY
+
+def add_transaction(user_id, amount, transaction_type, description=""):
+    """Add a transaction record"""
+    transaction = Transaction(
+        user_id=user_id,
+        amount=amount,
+        transaction_type=transaction_type,
+        description=description
+    )
+    db.session.add(transaction)
+    db.session.commit()
+
+MAX_DAILY_ONLINE_TIME = int(os.environ.get('MAX_DAILY_ONLINE_TIME', 14400))  # 4 hours default
 
 #==== Flask App Config ====
 
-app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 #==== CSRF Protection ====
@@ -295,6 +412,22 @@ class User(db.Model):
     # Machine Learning Features
     ml_fraud_probability = db.Column(db.Float, default=0.0)  # ML model fraud probability
     feature_vector_hash = db.Column(db.String(64))  # Hash of ML features for comparison
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    def reset_daily_stats(self):
+        """Reset daily stats if it's a new day"""
+        today = datetime.utcnow().date()
+        if self.last_daily_reset != today:
+            self.videos_watched_today = 0
+            self.daily_bonus_given = False
+            self.daily_online_time = 0
+            self.last_daily_reset = today
+            db.session.commit()
 
 class IPLog(db.Model):
     """Track user IP addresses and login history"""
@@ -327,9 +460,11 @@ class Video(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     min_watch_time = db.Column(db.Integer, default=VIDEO_WATCH_TIME)  # seconds
     reward_amount = db.Column(db.Float, default=VIDEO_REWARD_AMOUNT)
+    url = db.Column(db.String(500), nullable=False)
     
     # Add relationship
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
+    creator = db.relationship('User', backref='videos')
 
 class WatchSession(db.Model):
     __tablename__ = 'watch_sessions'  # Keep this as is
@@ -355,7 +490,30 @@ class WatchSession(db.Model):
     
     user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
     video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
+
+class WatchHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
+    watch_time = db.Column(db.Integer, default=0)  # in seconds
+    reward_earned = db.Column(db.Float, default=0.0)
+    completed = db.Column(db.Boolean, default=False)
+    watched_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Relationships
+    user = db.relationship('User', backref='watch_history')
+    video = db.relationship('Video', backref='watch_history')
+
+class Transaction(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    transaction_type = db.Column(db.String(50), nullable=False)  # 'video_watch', 'daily_bonus', 'withdrawal'
+    description = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship
+    user = db.relationship('User', backref='transactions')
 
 class DailySession(db.Model):
     """Track daily online sessions for daily rewards"""
@@ -423,6 +581,8 @@ class SecurityEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     event_type = db.Column(db.String(50), nullable=False)  # 'proxy_detected', 'bot_detected', etc.
+    severity = db.Column(db.String(10), default='low')  # low, medium, high, critical
+    description = db.Column(db.Text)
     severity = db.Column(db.String(10), default='low')  # low, medium, high, critical
     description = db.Column(db.Text)
     ip_address = db.Column(db.String(45))
