@@ -1773,6 +1773,336 @@ def complete_video():
         db.session.rollback()
         return jsonify({'error': 'Failed to complete video'}), 500
 
+@app.route('/api/balance', methods=['GET'])
+def get_balance():
+    """Get user balance with enhanced security and fraud detection"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    try:
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+        
+        # Validate user exists and is not banned
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        if user.is_banned:
+            return jsonify({'error': 'Account is banned'}), 403
+        
+        # Check for excessive balance requests (rate limiting)
+        try:
+            balance_request_count = getattr(user, 'balance_request_count', 0)
+            last_balance_request = getattr(user, 'last_balance_request', None)
+            
+            current_time = datetime.utcnow()
+            
+            # Reset counter if more than 1 minute has passed
+            if last_balance_request and (current_time - last_balance_request).total_seconds() > 60:
+                balance_request_count = 0
+            
+            # Check if too many requests in short time
+            if balance_request_count > 30:  # Max 30 requests per minute
+                log_security_event(user_id, 'excessive_balance_requests', 'medium',
+                                 f'Excessive balance requests: {balance_request_count} in last minute')
+                return jsonify({'error': 'Too many balance requests. Please wait.'}), 429
+            
+            # Update request tracking
+            user.balance_request_count = balance_request_count + 1
+            user.last_balance_request = current_time
+            
+        except Exception as e:
+            print(f"⚠️ Balance request tracking failed: {str(e)}")
+            # Continue without rate limiting if tracking fails
+        
+        # Check for proxy/VPN
+        try:
+            is_proxy = detect_proxy_vpn(user_ip)
+            if is_proxy:
+                log_security_event(user_id, 'proxy_balance_request', 'low',
+                                 f'Balance requested from proxy/VPN: {user_ip}')
+        except Exception as e:
+            print(f"⚠️ Proxy detection failed: {str(e)}")
+            is_proxy = False
+        
+        # Get current balance with validation
+        try:
+            current_balance = float(user.balance_usd or 0)
+            
+            # Validate balance integrity
+            if current_balance < 0:
+                log_security_event(user_id, 'negative_balance_detected', 'high',
+                                 f'Negative balance detected: ${current_balance}')
+                # Reset to 0 if somehow negative
+                current_balance = 0
+                user.balance_usd = 0
+                
+        except (ValueError, TypeError) as e:
+            print(f"⚠️ Balance validation error: {str(e)}")
+            current_balance = 0
+            user.balance_usd = 0
+        
+        # Calculate earnings statistics
+        try:
+            total_earnings = db.session.query(func.sum(Earning.amount)).filter_by(user_id=user_id).scalar() or 0
+            today_earnings = db.session.query(func.sum(Earning.amount)).filter(
+                Earning.user_id == user_id,
+                func.date(Earning.created_at) == datetime.utcnow().date()
+            ).scalar() or 0
+            
+            # Get earnings by source
+            earnings_by_source = db.session.query(
+                Earning.source,
+                func.sum(Earning.amount).label('total')
+            ).filter_by(user_id=user_id).group_by(Earning.source).all()
+            
+            earnings_breakdown = {source: float(total) for source, total in earnings_by_source}
+            
+        except Exception as e:
+            print(f"⚠️ Earnings calculation failed: {str(e)}")
+            total_earnings = 0
+            today_earnings = 0
+            earnings_breakdown = {}
+        
+        # Get user stats
+        try:
+            user_stats = {
+                'total_videos_watched': user.total_videos_watched or 0,
+                'consecutive_days': user.consecutive_days or 0,
+                'last_bonus_date': user.last_bonus_date.isoformat() if user.last_bonus_date else None,
+                'daily_bonus_given': user.daily_bonus_given or False,
+                'daily_online_time': user.daily_online_time or 0,
+                'risk_level': user.risk_level or 'low',
+                'account_status': 'active' if not user.is_banned else 'banned',
+                'behavioral_score': getattr(user, 'behavioral_score', 100),
+                'trust_multiplier': calculate_trust_multiplier(user) if hasattr(user, 'calculate_trust_multiplier') else 1.0
+            }
+        except Exception as e:
+            print(f"⚠️ User stats calculation failed: {str(e)}")
+            user_stats = {
+                'total_videos_watched': 0,
+                'consecutive_days': 0,
+                'last_bonus_date': None,
+                'daily_bonus_given': False,
+                'daily_online_time': 0,
+                'risk_level': 'low',
+                'account_status': 'active',
+                'behavioral_score': 100,
+                'trust_multiplier': 1.0
+            }
+        
+        # Check for pending payouts
+        try:
+            pending_payouts = db.session.query(func.sum(Payout.amount)).filter(
+                Payout.user_id == user_id,
+                Payout.status == 'pending'
+            ).scalar() or 0
+            
+            completed_payouts = db.session.query(func.sum(Payout.amount)).filter(
+                Payout.user_id == user_id,
+                Payout.status == 'completed'
+            ).scalar() or 0
+            
+        except Exception as e:
+            print(f"⚠️ Payout calculation failed: {str(e)}")
+            pending_payouts = 0
+            completed_payouts = 0
+        
+        # Update user's last activity
+        try:
+            user.last_activity = datetime.utcnow()
+            user.last_ip_address = user_ip
+            db.session.commit()
+        except Exception as e:
+            print(f"⚠️ User activity update failed: {str(e)}")
+            db.session.rollback()
+        
+        # Prepare response
+        response_data = {
+            'success': True,
+            'balance': {
+                'current': round(current_balance, 2),
+                'currency': 'USD',
+                'formatted': f'${current_balance:.2f}'
+            },
+            'earnings': {
+                'total': round(float(total_earnings), 2),
+                'today': round(float(today_earnings), 2),
+                'breakdown': earnings_breakdown
+            },
+            'payouts': {
+                'pending': round(float(pending_payouts), 2),
+                'completed': round(float(completed_payouts), 2),
+                'available_for_withdrawal': round(max(0, current_balance - pending_payouts), 2)
+            },
+            'user_stats': user_stats,
+            'security': {
+                'risk_level': user.risk_level or 'low',
+                'account_verified': not user.is_banned,
+                'proxy_detected': is_proxy,
+                'last_updated': datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Log successful balance request
+        log_security_event(user_id, 'balance_requested', 'info',
+                         f'Balance requested: ${current_balance:.2f}',
+                         additional_data={
+                             'ip_address': user_ip,
+                             'user_agent': user_agent,
+                             'proxy_detected': is_proxy
+                         })
+        
+        print(f"✅ Balance requested: User {user_id}, Balance: ${current_balance:.2f}")
+        
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        print(f"❌ Balance API error: {str(e)}")
+        db.session.rollback()
+        
+        # Log the error
+        try:
+            log_security_event(session.get('user_id'), 'balance_api_error', 'high',
+                             f'Balance API error: {str(e)}')
+        except:
+            pass
+        
+        return jsonify({
+            'error': 'Failed to retrieve balance',
+            'success': False,
+            'message': 'An error occurred while fetching your balance. Please try again.'
+        }), 500
+
+@app.route('/api/balance/history', methods=['GET'])
+def get_balance_history():
+    """Get user balance history with pagination and filtering"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    
+    try:
+        user_id = session['user_id']
+        
+        # Validate user exists and is not banned
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+            
+        if user.is_banned:
+            return jsonify({'error': 'Account is banned'}), 403
+        
+        # Get query parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)  # Max 100 per page
+        source_filter = request.args.get('source', None)
+        start_date = request.args.get('start_date', None)
+        end_date = request.args.get('end_date', None)
+        
+        # Build query
+        query = Earning.query.filter_by(user_id=user_id)
+        
+        # Apply filters
+        if source_filter:
+            query = query.filter(Earning.source == source_filter)
+        
+        if start_date:
+            try:
+                start_date_obj = datetime.fromisoformat(start_date)
+                query = query.filter(Earning.created_at >= start_date_obj)
+            except ValueError:
+                return jsonify({'error': 'Invalid start_date format'}), 400
+        
+        if end_date:
+            try:
+                end_date_obj = datetime.fromisoformat(end_date)
+                query = query.filter(Earning.created_at <= end_date_obj)
+            except ValueError:
+                return jsonify({'error': 'Invalid end_date format'}), 400
+        
+        # Order by most recent first
+        query = query.order_by(Earning.created_at.desc())
+        
+        # Paginate
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Format earnings data
+        earnings_data = []
+        for earning in pagination.items:
+            earnings_data.append({
+                'id': earning.id,
+                'amount': round(float(earning.amount), 2),
+                'source': earning.source,
+                'created_at': earning.created_at.isoformat(),
+                'description': getattr(earning, 'description', None)
+            })
+        
+        # Calculate summary statistics
+        total_filtered = query.count()
+        total_amount = db.session.query(func.sum(Earning.amount)).filter_by(user_id=user_id).scalar() or 0
+        
+        response_data = {
+            'success': True,
+            'earnings': earnings_data,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_filtered,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            },
+            'summary': {
+                'total_amount': round(float(total_amount), 2),
+                'filtered_count': total_filtered,
+                'sources': list(set(e.source for e in pagination.items))
+            }
+        }
+        
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        print(f"❌ Balance history API error: {str(e)}")
+        return jsonify({
+            'error': 'Failed to retrieve balance history',
+            'success': False
+        }), 500
+
+# Helper function for trust multiplier calculation
+def calculate_trust_multiplier(user):
+    """Calculate trust multiplier based on user behavior"""
+    try:
+        base_multiplier = 1.0
+        
+        # Positive factors
+        if user.consecutive_days > 7:
+            base_multiplier += 0.1
+        if user.consecutive_days > 30:
+            base_multiplier += 0.2
+        if getattr(user, 'behavioral_score', 100) > 90:
+            base_multiplier += 0.1
+        
+        # Negative factors
+        if user.risk_level == 'high':
+            base_multiplier -= 0.3
+        elif user.risk_level == 'medium':
+            base_multiplier -= 0.1
+        
+        if getattr(user, 'cheat_violations', 0) > 0:
+            base_multiplier -= 0.2
+        
+        # Ensure multiplier is between 0.1 and 2.0
+        return max(0.1, min(2.0, base_multiplier))
+        
+    except Exception as e:
+        print(f"⚠️ Trust multiplier calculation failed: {str(e)}")
+        return 1.0
+
 @app.route('/api/claim_daily_bonus', methods=['POST'])
 def claim_daily_bonus():
     """Claim daily bonus with comprehensive fraud prevention"""
