@@ -1541,8 +1541,8 @@ def utility_processor():
         daily_video_limit=DAILY_VIDEO_LIMIT
     )
 
- @app.route('/heartbeat', methods=['POST'])
- def heartbeat():
+@app.route('/heartbeat', methods=['POST'])
+def heartbeat():
     """Track user online time for daily bonus eligibility"""
     if 'user_id' not in session:
         return jsonify({'error': 'Not logged in'}), 401
@@ -1577,6 +1577,7 @@ def utility_processor():
         print(f"❌ Heartbeat error: {str(e)}")
         return jsonify({'error': 'Heartbeat failed'}), 500
 
+
 # Simplified helper functions
 def detect_daily_bonus_fraud(user, user_ip, user_agent, behavioral_data, device_data):
     """Basic fraud detection - replace with your logic"""
@@ -1592,6 +1593,7 @@ def detect_daily_bonus_fraud(user, user_ip, user_agent, behavioral_data, device_
     
     return len(fraud_reasons) > 0, fraud_reasons
 
+
 def reset_daily_data_if_needed(user):
     """Reset daily data if new day"""
     today = datetime.utcnow().date()
@@ -1601,9 +1603,11 @@ def reset_daily_data_if_needed(user):
         user.daily_bonus_attempts = 0
     return user
 
+
 def verify_online_time_legitimacy(user, behavioral_data):
     """Verify online time is legitimate"""
     return user.daily_online_time or 0
+
 
 def calculate_trust_multiplier(user):
     """Calculate trust multiplier"""
@@ -1619,6 +1623,7 @@ def calculate_trust_multiplier(user):
     
     return max(0.1, min(2.0, base_multiplier))
 
+
 def calculate_consecutive_days(user, today):
     """Calculate consecutive days"""
     if not user.last_bonus_date:
@@ -1632,6 +1637,7 @@ def calculate_consecutive_days(user, today):
     else:
         return 1
 
+
 def update_positive_daily_behaviors(user, behavioral_data):
     """Update positive behaviors"""
     if not hasattr(user, 'behavioral_score'):
@@ -1640,13 +1646,16 @@ def update_positive_daily_behaviors(user, behavioral_data):
     # Increment score for legitimate claim
     user.behavioral_score = min(100, user.behavioral_score + 1)
 
+
 def update_device_fingerprint(user_id, device_data, user_agent):
     """Simplified device fingerprint update"""
     pass  # Skip for now
 
+
 def update_user_geolocation(user_id, user_ip):
     """Simplified geolocation update"""
     pass  # Skip for now
+
 
 def log_security_event(user_id, event_type, severity, description, additional_data=None):
     """Simplified security logging"""
