@@ -314,7 +314,7 @@ class Video(db.Model):
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
 
 class WatchSession(db.Model):
-    __tablename__ = 'watch_sessions'  # This is what other models should reference
+    __tablename__ = 'watch_sessions'  # Keep this as is
     """Track individual video watch sessions for anti-cheat"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -337,6 +337,7 @@ class WatchSession(db.Model):
     
     user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
     video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
+    
 
 class DailySession(db.Model):
     """Track daily online sessions for daily rewards"""
@@ -419,7 +420,7 @@ class SecurityEvent(db.Model):
 class MouseMovement(db.Model):
     """Track mouse movements for bot detection"""
     id = db.Column(db.Integer, primary_key=True)
-    # FIXED: Changed from 'watch_session.id' to 'watch_sessions.id'
+    # FIXED: Now correctly references the table name 'watch_sessions'
     session_id = db.Column(db.Integer, db.ForeignKey('watch_sessions.id'), nullable=False)
     timestamp = db.Column(db.Float, nullable=False)  # Milliseconds since session start
     x_coordinate = db.Column(db.Integer)
@@ -466,7 +467,7 @@ class RiskScore(db.Model):
     """Store ML-based risk scores and fraud predictions"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    # FIXED: Changed from 'watch_session.id' to 'watch_sessions.id'
+    # FIXED: Now correctly references the table name 'watch_sessions'
     session_id = db.Column(db.Integer, db.ForeignKey('watch_sessions.id'), nullable=True)
     model_version = db.Column(db.String(20))  # Which ML model version was used
     fraud_probability = db.Column(db.Float, nullable=False)  # 0.0 to 1.0
