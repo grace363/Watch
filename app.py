@@ -1541,460 +1541,150 @@ def utility_processor():
         daily_video_limit=DAILY_VIDEO_LIMIT
     )
 
-@app.route('/heartbeat', methods=['POST'])
+@app.route('/earnings')
+@login_required
+def earnings():
+    user = get_current_user()
+    if not user:
+        return redirect(url_for('login'))
+    
+    # Get recent transactions
+    transactions = Transaction.query.filter_by(user_id=user.id).order_by(Transaction.created_at.desc()).limit(50).all()
+    
+    return render_template('earnings.html', user=user, transactions=transactions)
+
+
+app.route('/heartbeat', methods=['POST'])
+@login_required
 def heartbeat():
-    """Track user online time for daily bonus eligibility"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    data = request.get_json()
+    online_time = data.get('online_time', 0)
+    focus_lost_count = data.get('focus_lost_count', 0)
+    page = data.get('page', 'unknown')
     
     try:
-        user_id = session['user_id']
-        user = User.query.get(user_id)
+        # Update user's online time and activity
+        user.daily_online_time = max(user.daily_online_time, online_time)
+        user.last_active = datetime.utcnow()
         
-        if not user or user.is_banned:
-            return jsonify({'error': 'Account unavailable'}), 403
-        
-        # Reset daily data if needed
-        today = datetime.utcnow().date()
-        if user.last_activity_date != today:
-            user.daily_online_time = 0
-            user.last_activity_date = today
-        
-        # Increment online time (heartbeat every 5 seconds)
-        user.daily_online_time = (user.daily_online_time or 0) + SESSION_HEARTBEAT_INTERVAL
-        user.last_activity = datetime.utcnow()
+        # Anti-cheat: If user lost focus too many times, don't count time
+        if focus_lost_count > 10:
+            logger.warning(f'User {user.email} lost focus {focus_lost_count} times')
         
         db.session.commit()
         
         return jsonify({
             'success': True,
             'online_time': user.daily_online_time,
-            'required_time': DAILY_ONLINE_TIME,
-            'can_claim': user.daily_online_time >= DAILY_ONLINE_TIME and not user.daily_bonus_given
+            'can_claim_bonus': user.daily_online_time >= DAILY_ONLINE_TIME and not user.daily_bonus_given
         })
         
     except Exception as e:
-        print(f"❌ Heartbeat error: {str(e)}")
-        return jsonify({'error': 'Heartbeat failed'}), 500
+        db.session.rollback()
+        logger.error(f'Error updating heartbeat for user {user.email}: {str(e)}')
+        return jsonify({'error': 'Internal server error'}), 500
 
 
-# Simplified helper functions
-def detect_daily_bonus_fraud(user, user_ip, user_agent, behavioral_data, device_data):
-    """Basic fraud detection - replace with your logic"""
-    fraud_reasons = []
+@app.route('/api/complete_video_watch', methods=['POST'])
+@login_required
+def complete_video_watch():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
     
-    # Check if too many attempts today
-    if user.daily_bonus_attempts > 10:
-        fraud_reasons.append("Too many claim attempts")
+    data = request.get_json()
+    video_id = data.get('video_id')
+    watch_time = data.get('watch_time', 0)
     
-    # Check if claimed too recently
-    if user.last_bonus_claim and (datetime.utcnow() - user.last_bonus_claim).total_seconds() < 3600:
-        fraud_reasons.append("Claimed too recently")
+    if not video_id:
+        return jsonify({'error': 'Video ID required'}), 400
     
-    return len(fraud_reasons) > 0, fraud_reasons
-
-
-def reset_daily_data_if_needed(user):
-    """Reset daily data if new day"""
+    video = Video.query.get(video_id)
+    if not video:
+        return jsonify({'error': 'Video not found'}), 404
+    
+    # Check if user can watch more videos
+    if not can_watch_more_videos(user):
+        return jsonify({'error': 'Daily video limit reached'}), 400
+    
+    # Check if user watched for minimum required time
+    if watch_time < video.min_watch_time:
+        return jsonify({
+            'error': 'Minimum watch time not met',
+            'required': video.min_watch_time,
+            'watched': watch_time
+        }), 400
+    
+    # Check if user already watched this video today
     today = datetime.utcnow().date()
-    if user.last_bonus_date != today:
-        user.daily_bonus_given = False
-        user.daily_online_time = 0
-        user.daily_bonus_attempts = 0
-    return user
-
-
-def verify_online_time_legitimacy(user, behavioral_data):
-    """Verify online time is legitimate"""
-    return user.daily_online_time or 0
-
-
-def calculate_trust_multiplier(user):
-    """Calculate trust multiplier"""
-    base_multiplier = 1.0
+    existing_watch = WatchHistory.query.filter_by(
+        user_id=user.id, 
+        video_id=video_id
+    ).filter(
+        db.func.date(WatchHistory.watched_at) == today
+    ).first()
     
-    # Positive factors
-    if hasattr(user, 'consecutive_days') and user.consecutive_days > 7:
-        base_multiplier += 0.1
-    
-    # Negative factors
-    if hasattr(user, 'risk_level') and user.risk_level == 'high':
-        base_multiplier -= 0.3
-    
-    return max(0.1, min(2.0, base_multiplier))
-
-
-def calculate_consecutive_days(user, today):
-    """Calculate consecutive days"""
-    if not user.last_bonus_date:
-        return 1
-    
-    days_diff = (today - user.last_bonus_date).days
-    if days_diff == 1:
-        return (user.consecutive_days or 0) + 1
-    elif days_diff == 0:
-        return user.consecutive_days or 1
-    else:
-        return 1
-
-
-def update_positive_daily_behaviors(user, behavioral_data):
-    """Update positive behaviors"""
-    if not hasattr(user, 'behavioral_score'):
-        user.behavioral_score = 100
-    
-    # Increment score for legitimate claim
-    user.behavioral_score = min(100, user.behavioral_score + 1)
-
-
-def update_device_fingerprint(user_id, device_data, user_agent):
-    """Simplified device fingerprint update"""
-    pass  # Skip for now
-
-
-def update_user_geolocation(user_id, user_ip):
-    """Simplified geolocation update"""
-    pass  # Skip for now
-
-
-def log_security_event(user_id, event_type, severity, description, additional_data=None):
-    """Simplified security logging"""
-    print(f"🔒 Security Event: User {user_id}, Type: {event_type}, Severity: {severity}, Description: {description}")
-
-@app.route('/api/complete_video', methods=['POST'])
-def complete_video():
-    """Complete video watch with advanced fraud detection"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
+    if existing_watch:
+        return jsonify({'error': 'Video already watched today'}), 400
     
     try:
-        data = request.get_json()
-        session_token = data.get('session_token')
-        watch_duration = data.get('watch_duration', 0)
-        final_mouse_data = data.get('mouse_data', {})
-        completion_data = data.get('completion_data', {})
-        
-        user_id = session['user_id']
-        user_ip = request.remote_addr
-        
-        watch_session = WatchSession.query.filter_by(session_token=session_token).first()
-        
-        if not watch_session or watch_session.user_id != user_id:
-            return jsonify({'error': 'Invalid session'}), 400
-        
-        if watch_session.reward_given:
-            return jsonify({'error': 'Reward already claimed'}), 400
-        
-        # Complete the session
-        watch_session.end_time = datetime.utcnow()
-        watch_session.watch_duration = watch_duration
-        watch_session.is_completed = True
-        
-        # Enhanced fraud detection
-        fraud_detected, fraud_reasons = comprehensive_fraud_detection(
-            watch_session, final_mouse_data, completion_data, user_ip
-        )
-        
-        # ML-based fraud probability
-        ml_fraud_prob = calculate_ml_fraud_probability(watch_session, user_id)
-        
-        # Final risk assessment
-        final_risk = calculate_final_risk_score(watch_session, ml_fraud_prob, fraud_reasons)
-        
-        user = User.query.get(user_id)
-        
-        if fraud_detected or final_risk['risk_level'] in ['high', 'critical']:
-            watch_session.cheating_detected = True
-            watch_session.cheat_reason = '; '.join(fraud_reasons)
-            watch_session.is_suspicious = True
-            
-            # Update user fraud tracking
-            user.cheat_violations += 1
-            user.suspicious_activity_count += 1
-            user.ml_fraud_probability = ml_fraud_prob
-            user.risk_level = final_risk['risk_level']
-            user.last_risk_assessment = datetime.utcnow()
-            
-            # Log comprehensive security event
-            log_security_event(user_id, 'video_fraud_detected', 'critical', 
-                             f'Video completion fraud: {"; ".join(fraud_reasons)}',
-                             additional_data={
-                                 'session_token': session_token,
-                                 'ml_fraud_prob': ml_fraud_prob,
-                                 'final_risk': final_risk,
-                                 'watch_duration': watch_duration
-                             })
-            
-            # Progressive banning system
-            ban_result = check_progressive_ban(user)
-            if ban_result['should_ban']:
-                ban_user(user.id, ban_result['reason'])
-                db.session.commit()
-                session.clear()
-                return jsonify({
-                    'error': 'Account banned for repeated fraud attempts', 
-                    'banned': True,
-                    'reason': ban_result['reason']
-                }), 403
-            
-            db.session.commit()
-            return jsonify({
-                'error': 'Fraud detected: ' + '; '.join(fraud_reasons),
-                'violations': user.cheat_violations,
-                'risk_level': user.risk_level,
-                'ml_fraud_probability': ml_fraud_prob
-            }), 400
-        
-        # Legitimate completion - give reward
-        video = Video.query.get(watch_session.video_id)
-        
-        # Apply dynamic reward based on risk (lower risk = higher reward)
-        base_reward = video.reward_amount
-        risk_multiplier = get_risk_reward_multiplier(final_risk['risk_level'])
-        final_reward = base_reward * risk_multiplier
-        
-        user.balance_usd += final_reward
+        # Award video watch reward
+        user.balance_usd += video.reward_amount
         user.videos_watched_today += 1
-        user.total_watch_minutes += int(watch_duration // 60)
-        user.total_watch_time += int(watch_duration)
+        user.total_watch_minutes += watch_time / 60.0
         
-        # Update positive behavioral scores
-        update_positive_behavioral_scores(user, watch_session)
-        
-        watch_session.reward_given = True
-        
-        # Log earning with enhanced data
-        earning = Earning(
+        # Create watch history record
+        watch_history = WatchHistory(
             user_id=user.id,
-            amount=final_reward,
-            source='watch',
-            video_id=video.id
+            video_id=video_id,
+            watch_time=watch_time,
+            reward_earned=video.reward_amount,
+            completed=True
         )
-        db.session.add(earning)
+        db.session.add(watch_history)
         
-        # Store final risk score
-        store_risk_score(user_id, watch_session.id, final_risk, ml_fraud_prob)
+        # Add transaction record
+        add_transaction(
+            user.id,
+            video.reward_amount,
+            'video_watch',
+            f'Watched video: {video.title[:50]}...'
+        )
         
         db.session.commit()
         
+        logger.info(f'User {user.email} completed video {video.title} and earned ${video.reward_amount}')
+        
         return jsonify({
             'success': True,
-            'reward': final_reward,
-            'base_reward': base_reward,
-            'risk_multiplier': risk_multiplier,
+            'reward': video.reward_amount,
             'new_balance': user.balance_usd,
-            'videos_remaining': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
-            'risk_level': final_risk['risk_level'],
-            'behavioral_score': user.behavioral_score
+            'videos_watched_today': user.videos_watched_today,
+            'message': f'Video completed! Earned ${video.reward_amount:.3f}'
         })
         
     except Exception as e:
-        print(f"❌ Complete video error: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': 'Failed to complete video'}), 500
+        logger.error(f'Error completing video watch for user {user.email}: {str(e)}')
+        return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/balance', methods=['GET'])
-def get_balance():
-    """Get user balance with enhanced security and fraud detection"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
+@app.route('/api/balance')
+@login_required
+def api_balance():
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
     
-    try:
-        user_id = session['user_id']
-        user_ip = request.remote_addr
-        user_agent = request.headers.get('User-Agent', '')
-        
-        # Validate user exists and is not banned
-        user = User.query.get(user_id)
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-            
-        if user.is_banned:
-            return jsonify({'error': 'Account is banned'}), 403
-        
-        # Check for excessive balance requests (rate limiting)
-        try:
-            balance_request_count = getattr(user, 'balance_request_count', 0)
-            last_balance_request = getattr(user, 'last_balance_request', None)
-            
-            current_time = datetime.utcnow()
-            
-            # Reset counter if more than 1 minute has passed
-            if last_balance_request and (current_time - last_balance_request).total_seconds() > 60:
-                balance_request_count = 0
-            
-            # Check if too many requests in short time
-            if balance_request_count > 30:  # Max 30 requests per minute
-                log_security_event(user_id, 'excessive_balance_requests', 'medium',
-                                 f'Excessive balance requests: {balance_request_count} in last minute')
-                return jsonify({'error': 'Too many balance requests. Please wait.'}), 429
-            
-            # Update request tracking
-            user.balance_request_count = balance_request_count + 1
-            user.last_balance_request = current_time
-            
-        except Exception as e:
-            print(f"⚠️ Balance request tracking failed: {str(e)}")
-            # Continue without rate limiting if tracking fails
-        
-        # Check for proxy/VPN
-        try:
-            is_proxy = detect_proxy_vpn(user_ip)
-            if is_proxy:
-                log_security_event(user_id, 'proxy_balance_request', 'low',
-                                 f'Balance requested from proxy/VPN: {user_ip}')
-        except Exception as e:
-            print(f"⚠️ Proxy detection failed: {str(e)}")
-            is_proxy = False
-        
-        # Get current balance with validation
-        try:
-            current_balance = float(user.balance_usd or 0)
-            
-            # Validate balance integrity
-            if current_balance < 0:
-                log_security_event(user_id, 'negative_balance_detected', 'high',
-                                 f'Negative balance detected: ${current_balance}')
-                # Reset to 0 if somehow negative
-                current_balance = 0
-                user.balance_usd = 0
-                
-        except (ValueError, TypeError) as e:
-            print(f"⚠️ Balance validation error: {str(e)}")
-            current_balance = 0
-            user.balance_usd = 0
-        
-        # Calculate earnings statistics
-        try:
-            total_earnings = db.session.query(func.sum(Earning.amount)).filter_by(user_id=user_id).scalar() or 0
-            today_earnings = db.session.query(func.sum(Earning.amount)).filter(
-                Earning.user_id == user_id,
-                func.date(Earning.created_at) == datetime.utcnow().date()
-            ).scalar() or 0
-            
-            # Get earnings by source
-            earnings_by_source = db.session.query(
-                Earning.source,
-                func.sum(Earning.amount).label('total')
-            ).filter_by(user_id=user_id).group_by(Earning.source).all()
-            
-            earnings_breakdown = {source: float(total) for source, total in earnings_by_source}
-            
-        except Exception as e:
-            print(f"⚠️ Earnings calculation failed: {str(e)}")
-            total_earnings = 0
-            today_earnings = 0
-            earnings_breakdown = {}
-        
-        # Get user stats
-        try:
-            user_stats = {
-                'total_videos_watched': user.total_videos_watched or 0,
-                'consecutive_days': user.consecutive_days or 0,
-                'last_bonus_date': user.last_bonus_date.isoformat() if user.last_bonus_date else None,
-                'daily_bonus_given': user.daily_bonus_given or False,
-                'daily_online_time': user.daily_online_time or 0,
-                'risk_level': user.risk_level or 'low',
-                'account_status': 'active' if not user.is_banned else 'banned',
-                'behavioral_score': getattr(user, 'behavioral_score', 100),
-                'trust_multiplier': calculate_trust_multiplier(user) if hasattr(user, 'calculate_trust_multiplier') else 1.0
-            }
-        except Exception as e:
-            print(f"⚠️ User stats calculation failed: {str(e)}")
-            user_stats = {
-                'total_videos_watched': 0,
-                'consecutive_days': 0,
-                'last_bonus_date': None,
-                'daily_bonus_given': False,
-                'daily_online_time': 0,
-                'risk_level': 'low',
-                'account_status': 'active',
-                'behavioral_score': 100,
-                'trust_multiplier': 1.0
-            }
-        
-        # Check for pending payouts
-        try:
-            pending_payouts = db.session.query(func.sum(Payout.amount)).filter(
-                Payout.user_id == user_id,
-                Payout.status == 'pending'
-            ).scalar() or 0
-            
-            completed_payouts = db.session.query(func.sum(Payout.amount)).filter(
-                Payout.user_id == user_id,
-                Payout.status == 'completed'
-            ).scalar() or 0
-            
-        except Exception as e:
-            print(f"⚠️ Payout calculation failed: {str(e)}")
-            pending_payouts = 0
-            completed_payouts = 0
-        
-        # Update user's last activity
-        try:
-            user.last_activity = datetime.utcnow()
-            user.last_ip_address = user_ip
-            db.session.commit()
-        except Exception as e:
-            print(f"⚠️ User activity update failed: {str(e)}")
-            db.session.rollback()
-        
-        # Prepare response
-        response_data = {
-            'success': True,
-            'balance': {
-                'current': round(current_balance, 2),
-                'currency': 'USD',
-                'formatted': f'${current_balance:.2f}'
-            },
-            'earnings': {
-                'total': round(float(total_earnings), 2),
-                'today': round(float(today_earnings), 2),
-                'breakdown': earnings_breakdown
-            },
-            'payouts': {
-                'pending': round(float(pending_payouts), 2),
-                'completed': round(float(completed_payouts), 2),
-                'available_for_withdrawal': round(max(0, current_balance - pending_payouts), 2)
-            },
-            'user_stats': user_stats,
-            'security': {
-                'risk_level': user.risk_level or 'low',
-                'account_verified': not user.is_banned,
-                'proxy_detected': is_proxy,
-                'last_updated': datetime.utcnow().isoformat()
-            }
-        }
-        
-        # Log successful balance request
-        log_security_event(user_id, 'balance_requested', 'info',
-                         f'Balance requested: ${current_balance:.2f}',
-                         additional_data={
-                             'ip_address': user_ip,
-                             'user_agent': user_agent,
-                             'proxy_detected': is_proxy
-                         })
-        
-        print(f"✅ Balance requested: User {user_id}, Balance: ${current_balance:.2f}")
-        
-        return jsonify(response_data), 200
-        
-    except Exception as e:
-        print(f"❌ Balance API error: {str(e)}")
-        db.session.rollback()
-        
-        # Log the error
-        try:
-            log_security_event(session.get('user_id'), 'balance_api_error', 'high',
-                             f'Balance API error: {str(e)}')
-        except:
-            pass
-        
-        return jsonify({
-            'error': 'Failed to retrieve balance',
-            'success': False,
-            'message': 'An error occurred while fetching your balance. Please try again.'
-        }), 500
+    return jsonify({
+        'balance': user.balance_usd,
+        'videos_watched_today': user.videos_watched_today,
+        'daily_bonus_given': user.daily_bonus_given,
+        'daily_online_time': user.daily_online_time
+    })
 
 @app.route('/api/balance/history', methods=['GET'])
 def get_balance_history():
@@ -2123,75 +1813,53 @@ def calculate_trust_multiplier(user):
         print(f"⚠️ Trust multiplier calculation failed: {str(e)}")
         return 1.0
 
-@app.route('/api/claim_daily_bonus', methods=['POST'])
+ @app.route('/api/claim_daily_bonus', methods=['POST'])
+@login_required
 def claim_daily_bonus():
-    """Simplified claim daily bonus"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Check if daily bonus already claimed
+    if user.daily_bonus_given:
+        return jsonify({'error': 'Daily bonus already claimed today'}), 400
+    
+    # Check if user has spent enough time online
+    if user.daily_online_time < DAILY_ONLINE_TIME:
+        return jsonify({
+            'error': 'Need to stay online longer',
+            'required': DAILY_ONLINE_TIME,
+            'current': user.daily_online_time
+        }), 400
     
     try:
-        user_id = session['user_id']
-        user = User.query.get(user_id)
-        
-        if not user or user.is_banned:
-            return jsonify({'error': 'Account unavailable'}), 403
-        
-        # Reset daily data if needed
-        user = reset_daily_data_if_needed(user)
-        
-        # Check if bonus already claimed today
-        today = datetime.utcnow().date()
-        if user.daily_bonus_given and user.last_bonus_date == today:
-            return jsonify({'error': 'Daily bonus already claimed today'}), 400
-        
-        # Check online time requirement
-        if (user.daily_online_time or 0) < DAILY_ONLINE_TIME:
-            return jsonify({
-                'error': f'Need {DAILY_ONLINE_TIME} seconds online. You have {user.daily_online_time or 0} seconds.',
-                'required': DAILY_ONLINE_TIME,
-                'current': user.daily_online_time or 0
-            }), 400
-        
-        # Calculate bonus
-        trust_multiplier = calculate_trust_multiplier(user)
-        final_bonus = DAILY_REWARD * trust_multiplier
-        
-        # Update user
-        old_balance = user.balance_usd or 0
-        user.balance_usd = float(old_balance) + final_bonus
+        # Award daily bonus
+        user.balance_usd += DAILY_REWARD
         user.daily_bonus_given = True
-        user.last_bonus_date = today
-        user.last_bonus_claim = datetime.utcnow()
-        user.total_daily_bonuses = (user.total_daily_bonuses or 0) + 1
-        user.consecutive_days = calculate_consecutive_days(user, today)
         
-        # Log earning
-        earning = Earning(
-            user_id=user.id,
-            amount=final_bonus,
-            source='daily_bonus'
+        # Add transaction record
+        add_transaction(
+            user.id, 
+            DAILY_REWARD, 
+            'daily_bonus', 
+            f'Daily bonus for staying online {DAILY_ONLINE_TIME}s'
         )
-        db.session.add(earning)
         
         db.session.commit()
         
-        print(f"✅ Daily bonus claimed: User {user.id}, Amount: ${final_bonus:.2f}")
+        logger.info(f'User {user.email} claimed daily bonus of ${DAILY_REWARD}')
         
         return jsonify({
             'success': True,
-            'bonus': final_bonus,
-            'old_balance': old_balance,
+            'bonus': DAILY_REWARD,
             'new_balance': user.balance_usd,
-            'consecutive_days': user.consecutive_days,
-            'message': f'Daily bonus of ${final_bonus:.2f} claimed successfully!'
+            'message': 'Daily bonus claimed successfully!'
         })
         
     except Exception as e:
-        print(f"❌ Daily bonus error: {str(e)}")
         db.session.rollback()
-        return jsonify({'error': f'Failed to claim bonus: {str(e)}'}), 500
-
-# Add these routes to your existing app.py file
+        logger.error(f'Error claiming daily bonus for user {user.email}: {str(e)}')
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/youtuber_dashboard')
 def youtuber_dashboard():
