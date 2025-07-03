@@ -227,17 +227,6 @@ class User(db.Model):
     last_bonus_date = db.Column(db.Date)
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
     
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    source = db.Column(db.String(50), nullable=False)  # 'daily_bonus', 'video_watch', etc.
-    description = db.Column(db.String(200))
-    ip_address = db.Column(db.String(45))
-    user_agent = db.Column(db.String(500))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship
-    user = db.relationship('User', backref='earnings')
 
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
