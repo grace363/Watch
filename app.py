@@ -28,6 +28,223 @@ from datetime import datetime
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# Initialize rate limiter
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
+
+# Firebase initialization
+def initialize_firebase():
+    try:
+        # Get Firebase service account key from environment variable
+        service_account_key = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY')
+        
+        if not service_account_key:
+            raise ValueError("FIREBASE_SERVICE_ACCOUNT_KEY environment variable not set")
+        
+        # Parse the JSON key
+        service_account_info = json.loads(service_account_key)
+        
+        # Initialize Firebase Admin SDK
+        cred = credentials.Certificate(service_account_info)
+        firebase_admin.initialize_app(cred)
+        
+        # Get Firestore client
+        db = firestore.client()
+        logger.info("Firebase initialized successfully")
+        return db
+        
+    except Exception as e:
+        logger.error(f"Firebase initialization error: {e}")
+        raise
+
+# Initialize Firebase
+try:
+    db = initialize_firebase()
+except Exception as e:
+    logger.error(f"Failed to initialize Firebase: {e}")
+    db = None
+
+# Security functions
+def generate_fingerprint_hash(user_agent, ip_address, additional_data=None):
+    """
+    Generate a unique fingerprint hash for user identification
+    """
+    try:
+        # Create base fingerprint data
+        fingerprint_data = {
+            'user_agent': user_agent,
+            'ip_address': ip_address,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        # Add additional data if provided
+        if additional_data:
+            fingerprint_data.update(additional_data)
+        
+        # Convert to JSON string and encode
+        fingerprint_string = json.dumps(fingerprint_data, sort_keys=True)
+        
+        # Generate hash using SHA256
+        fingerprint_hash = hashlib.sha256(fingerprint_string.encode('utf-8')).hexdigest()
+        
+        return fingerprint_hash
+    
+    except Exception as e:
+        logger.error(f"Error generating fingerprint hash: {e}")
+        return None
+
+def detect_proxy_vpn(ip_address):
+    """
+    Detect if an IP address is using a proxy or VPN
+    Returns dict with detection results
+    """
+    try:
+        proxy_indicators = {
+            'is_proxy': False,
+            'is_vpn': False,
+            'is_tor': False,
+            'risk_score': 0,
+            'provider': None,
+            'country': 'Unknown'
+        }
+        
+        # Check if IP is private/local
+        try:
+            ip_obj = ipaddress.ip_address(ip_address)
+            if ip_obj.is_private or ip_obj.is_loopback:
+                proxy_indicators['risk_score'] = 10
+                proxy_indicators['provider'] = 'Private/Local Network'
+                return proxy_indicators
+        except ValueError:
+            pass
+        
+        # Check against known proxy/VPN ranges (basic implementation)
+        # In production, you'd want to use a proper service like IPQualityScore
+        
+        # For now, return basic detection
+        return proxy_indicators
+        
+    except Exception as e:
+        logger.error(f"Error detecting proxy/VPN: {e}")
+        return {
+            'is_proxy': False,
+            'is_vpn': False,
+            'is_tor': False,
+            'risk_score': 0,
+            'provider': None,
+            'country': 'Unknown',
+            'error': str(e)
+        }
+
+def enhanced_proxy_detection(ip_address, api_key=None):
+    """
+    Enhanced proxy/VPN detection using external services
+    """
+    try:
+        # Example using IPQualityScore (you'd need an API key)
+        if api_key:
+            url = f"https://ipqualityscore.com/api/json/ip/{api_key}/{ip_address}"
+            params = {
+                'strictness': 1,
+                'allow_public_access_points': True,
+                'fast': True
+            }
+            
+            response = requests.get(url, params=params, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'is_proxy': data.get('proxy', False),
+                    'is_vpn': data.get('vpn', False),
+                    'is_tor': data.get('tor', False),
+                    'risk_score': data.get('fraud_score', 0),
+                    'provider': data.get('ISP', 'Unknown'),
+                    'country': data.get('country_code', 'Unknown')
+                }
+        
+        # Fallback to basic detection
+        return detect_proxy_vpn(ip_address)
+        
+    except Exception as e:
+        logger.error(f"Enhanced proxy detection error: {e}")
+        return detect_proxy_vpn(ip_address)
+
+# Authentication decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Utility functions
+def get_user_balance(user_id):
+    """Get user balance from Firestore"""
+    try:
+        if not db:
+            return 0.0
+        
+        user_ref = db.collection('users').document(str(user_id))
+        user_doc = user_ref.get()
+        
+        if user_doc.exists:
+            return user_doc.to_dict().get('balance', 0.0)
+        return 0.0
+        
+    except Exception as e:
+        logger.error(f"Error getting user balance: {e}")
+        return 0.0
+
+def update_user_balance(user_id, amount):
+    """Update user balance in Firestore"""
+    try:
+        if not db:
+            return False
+        
+        user_ref = db.collection('users').document(str(user_id))
+        user_doc = user_ref.get()
+        
+        if user_doc.exists:
+            current_balance = user_doc.to_dict().get('balance', 0.0)
+            new_balance = current_balance + amount
+            user_ref.update({'balance': new_balance})
+        else:
+            user_ref.set({'balance': amount, 'created_at': datetime.now()})
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error updating user balance: {e}")
+        return False
+
+def can_claim_daily_bonus(user_id):
+    """Check if user can claim daily bonus"""
+    try:
+        if not db:
+            return False
+        
+        user_ref = db.collection('users').document(str(user_id))
+        user_doc = user_ref.get()
+        
+        if user_doc.exists:
+            last_claim = user_doc.to_dict().get('last_daily_bonus_claim')
+            if last_claim:
+                # Check if 24 hours have passed
+                time_since_claim = datetime.now() - last_claim
+                return time_since_claim.total_seconds() > 24 * 3600
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error checking daily bonus eligibility: {e}")
+        return False
+
+
 
 #==== Flask App Config ====
 
