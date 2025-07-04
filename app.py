@@ -1527,6 +1527,7 @@ def utility_processor():
         daily_video_limit=DAILY_VIDEO_LIMIT
     )
 
+@app.route('/heartbeat', methods=['POST'])
 @app.route('/api/heartbeat', methods=['POST'])
 def heartbeat():
     """Keep track of user activity and session with enhanced anti-cheat"""
