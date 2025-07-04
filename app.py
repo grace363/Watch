@@ -1541,7 +1541,6 @@ def utility_processor():
         daily_video_limit=DAILY_VIDEO_LIMIT
     )
 
-@app.route('/heartbeat', methods=['POST'])
 @app.route('/api/heartbeat', methods=['POST'])
 def heartbeat():
     """Keep track of user activity and session with enhanced anti-cheat"""
@@ -3305,3 +3304,31 @@ def user_dashboard():
 
 MAX_VIDEOS_PER_DAY = 10
 DAILY_ONLINE_TIME = 1800  # seconds
+
+
+
+@app.route('/heartbeat', methods=['POST'])
+def heartbeat():
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Not logged in'}), 401
+
+        data = request.get_json() or {}
+        fingerprint = data.get('fingerprint', '')
+        ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+
+        fingerprint_hash = generate_fingerprint_hash(fingerprint)
+        is_proxy = detect_proxy_vpn(ip)
+
+        # Log or update user's heartbeat/session data if needed
+
+        return jsonify({
+            'fingerprint_hash': fingerprint_hash,
+            'is_proxy': is_proxy
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Heartbeat error: {e}")
+        return jsonify({'error': 'Heartbeat failed'}), 500
