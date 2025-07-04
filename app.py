@@ -1542,6 +1542,7 @@ def utility_processor():
     )
 
 @app.route('/heartbeat', methods=['POST'])
+@app.route('/api/heartbeat', methods=['POST'])
 def heartbeat():
     """Keep track of user activity and session with enhanced anti-cheat"""
     if 'user_id' not in session:
@@ -3213,7 +3214,6 @@ def claim_daily_bonus():
 
 
 
-@app.route('/heartbeat', methods=['POST'])
 def heartbeat():
     try:
         user_id = session.get('user_id')
@@ -3306,6 +3306,5 @@ def user_dashboard():
 
 MAX_VIDEOS_PER_DAY = 10
 DAILY_ONLINE_TIME = 1800  # seconds
-
 
 
