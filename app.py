@@ -2,7 +2,6 @@ import os
 import json 
 import base64 
 import secrets
-import secret
 import hashlib
 import uuid
 import logging
@@ -24,7 +23,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, JSON
 from sqlalchemy import String
-
+from datetime import datetime
+from app import db
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -219,53 +219,57 @@ serializer = URLSafeTimedSerializer(app.secret_key)
 
 class User(db.Model): 
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False) 
     password_hash = db.Column(db.String(200), nullable=False) 
-    account_type = db.Column(db.String(10), nullable=False) 
+    account_type = db.Column(db.String(20), nullable=False, default='Viewer')  # Increased length for 'YouTuber'
     is_verified = db.Column(db.Boolean, default=False) 
     last_login_date = db.Column(db.DateTime) 
+    
+    # Dashboard fields - core functionality
     total_watch_minutes = db.Column(db.Integer, default=0) 
     daily_bonus_given = db.Column(db.Boolean, default=False) 
     balance_usd = db.Column(db.Float, default=0.0)
+    videos_watched_today = db.Column(db.Integer, default=0)
+    daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
+    
+    # Date tracking
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_ip = db.Column(db.String(45))  # Store last known IP (IPv6 can be up to 45 chars)
+    last_bonus_date = db.Column(db.Date)
+    last_video_date = db.Column(db.Date)
+    last_activity_date = db.Column(db.Date, default=datetime.utcnow().date())
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Personal info
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))
-    last_bonus_date = db.Column(db.Date)
-    daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
+    
+    # Session and IP tracking
+    last_ip = db.Column(db.String(45))  # Store last known IP (IPv6 can be up to 45 chars)
+    last_ip_address = db.Column(db.String(45))  # Alternative field name
+    session_token = db.Column(db.String(64))
+    session_start_time = db.Column(db.DateTime)
+    current_session_start = db.Column(db.DateTime)
+    last_heartbeat = db.Column(db.DateTime)
+    
+    # Watch time tracking
     total_watched_time = db.Column(db.Integer, default=0)
-    last_watch_time = db.Column(db.Integer, default = 0)
+    total_watch_time = db.Column(db.Integer, default=0)  # Alternative field name
+    last_watch_time = db.Column(db.Integer, default=0)
+    total_videos_watched = db.Column(db.Integer, default=0)  
+    
+    # Bonus and rewards
+    last_bonus_claim = db.Column(db.DateTime)  # When bonus was last claimed
+    total_daily_bonuses = db.Column(db.Integer, default=0)
+    consecutive_days = db.Column(db.Integer, default=0)
     
     # Anti-cheat fields
-    videos_watched_today = db.Column(db.Integer, default=0)
-    last_video_date = db.Column(db.Date)
     cheat_violations = db.Column(db.Integer, default=0)
     is_banned = db.Column(db.Boolean, default=False)
     ban_reason = db.Column(db.String(200))
-    session_start_time = db.Column(db.DateTime)
-    last_heartbeat = db.Column(db.DateTime)
-    last_bonus_claim = db.Column(db.DateTime)  # When bonus was last claimed
-    last_activity_date = db.Column(db.Date, default=datetime.utcnow().date())  # Use Date (not db.date)
-    current_session_start = db.Column(db.DateTime)
-    total_daily_bonuses = db.Column(db.Integer, default=0)
-    
-    # Session tracking 
-    session_token = db.Column(db.String(64))
-
-    # Consecutive days and bonuses
-    consecutive_days = db.Column(db.Integer, default=0)
-
-    # Anti-cheat specific fields
     back_button_pressed = db.Column(db.Boolean, default=False)
     focus_lost_count = db.Column(db.Integer, default=0)
-    
-    # Additional tracking fields
-    total_watch_time = db.Column(db.Integer, default=0)
-    last_ip_address = db.Column(db.String(45))
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    total_videos_watched = db.Column(db.Integer, default=0)  
     
     # Advanced Anti-Cheat Fields
     device_fingerprint = db.Column(db.String(200))  # Browser/device fingerprint
@@ -319,22 +323,17 @@ class Video(db.Model):
     added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
-    min_watch_time = db.Column(db.Integer, default=VIDEO_WATCH_TIME)  # seconds
-    reward_amount = db.Column(db.Float, default=VIDEO_REWARD_AMOUNT)
+    min_watch_time = db.Column(db.Integer, default=30)  # Default 30 seconds
+    reward_amount = db.Column(db.Float, default=0.01)  # Default $0.01
     
     # Add relationship
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
 
-from datetime import datetime
-from app import db
-
 class WatchSession(db.Model):
-    __tablename__ = 'watch_sessions'
     """Track individual video watch sessions for anti-cheat"""
-
     id = db.Column(db.Integer, primary_key=True)
     
-    # Foreign key relationships (fixed to match likely table names)
+    # Foreign key relationships
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
 
@@ -361,7 +360,7 @@ class WatchSession(db.Model):
     video_length = db.Column(db.Integer)  # total video length in seconds
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationships (User & Video)
+    # Relationships
     user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
     video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
 
@@ -388,7 +387,7 @@ class Earning(db.Model):
     amount = db.Column(db.Float, nullable=False)
     source = db.Column(db.String(50))  # 'watch', 'daily_bonus', 'referral', etc.
     video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # FIXED: This was missing
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('earnings', lazy=True))
@@ -408,7 +407,6 @@ class Payout(db.Model):
     
     user = db.relationship('User', backref=db.backref('payouts', lazy=True))
 
-
 class Withdrawal(db.Model):
     """Completed withdrawals"""
     id = db.Column(db.Integer, primary_key=True)
@@ -420,18 +418,6 @@ class Withdrawal(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('withdrawals', lazy=True))
-
-class Earning(db.Model):
-    """Track user earnings"""
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    source = db.Column(db.String(50))  # 'watch', 'daily_bonus', 'referral', etc.
-    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', backref=db.backref('earnings', lazy=True))
-    video = db.relationship('Video', backref=db.backref('earnings', lazy=True))
 
 class DeviceFingerprint(db.Model):
     """Track device fingerprints for fraud detection"""
@@ -474,8 +460,7 @@ class SecurityEvent(db.Model):
 class MouseMovement(db.Model):
     """Track mouse movements for bot detection"""
     id = db.Column(db.Integer, primary_key=True)
-    # FIXED: Now correctly references the table name 'watch_sessions'
-    session_id = db.Column(db.Integer, db.ForeignKey('watch_sessions.id'), nullable=False)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=False)
     timestamp = db.Column(db.Float, nullable=False)  # Milliseconds since session start
     x_coordinate = db.Column(db.Integer)
     y_coordinate = db.Column(db.Integer)
@@ -521,8 +506,7 @@ class RiskScore(db.Model):
     """Store ML-based risk scores and fraud predictions"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    # FIXED: Now correctly references the table name 'watch_sessions'
-    session_id = db.Column(db.Integer, db.ForeignKey('watch_sessions.id'), nullable=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('watch_session.id'), nullable=True)
     model_version = db.Column(db.String(20))  # Which ML model version was used
     fraud_probability = db.Column(db.Float, nullable=False)  # 0.0 to 1.0
     behavioral_score = db.Column(db.Float)
@@ -550,7 +534,7 @@ class HoneypotInteraction(db.Model):
     automatic_ban = db.Column(db.Boolean, default=True)  # Auto-ban on honeypot interaction
     
     user = db.relationship('User', backref=db.backref('honeypot_interactions', lazy=True))
-    
+
 #==== Anti-Cheat Utility Functions ====
 
 def reset_daily_data_if_needed(user):
