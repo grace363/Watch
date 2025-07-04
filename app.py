@@ -2121,131 +2121,7 @@ def calculate_trust_multiplier(user):
         print(f"⚠️ Trust multiplier calculation failed: {str(e)}")
         return 1.0
 
-@app.route('/api/claim_daily_bonus', methods=['POST'])
-def claim_daily_bonus():
-    """Claim daily bonus with comprehensive fraud prevention"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    
-    try:
-        data = request.get_json()
-        behavioral_data = data.get('behavioral_data', {})
-        device_data = data.get('device_data', {})
-        
-        user_id = session['user_id']
-        user_ip = request.remote_addr
-        user_agent = request.headers.get('User-Agent', '')
-        
-        user = User.query.get(user_id)
-        
-        if not user or user.is_banned:
-            return jsonify({'error': 'Account unavailable'}), 403
-        
-        # Enhanced fraud detection for daily bonus
-        fraud_detected, fraud_reasons = detect_daily_bonus_fraud(
-            user, user_ip, user_agent, behavioral_data, device_data
-        )
-        
-        if fraud_detected:
-            user.suspicious_activity_count += 1
-            user.risk_level = 'high'
-            
-            log_security_event(user_id, 'daily_bonus_fraud', 'high',
-                             f'Daily bonus fraud attempt: {"; ".join(fraud_reasons)}')
-            
-            db.session.commit()
-            return jsonify({
-                'error': 'Suspicious activity detected',
-                'reasons': fraud_reasons,
-                'risk_level': user.risk_level
-            }), 400
-        
-        # Reset daily data if needed
-        user = reset_daily_data_if_needed(user)
-        
-        # Get today's date for comparison
-        today = datetime.utcnow().date()
-        
-        # Check if bonus was already claimed today
-        if user.daily_bonus_given and user.last_bonus_date == today:
-            return jsonify({'error': 'Daily bonus already claimed today'}), 400
-        
-        # Enhanced online time verification
-        verified_online_time = verify_online_time_legitimacy(user, behavioral_data)
-        
-        if verified_online_time < DAILY_ONLINE_TIME:
-            return jsonify({
-                'error': f'Insufficient verified online time: {verified_online_time}s of {DAILY_ONLINE_TIME}s required',
-                'required': DAILY_ONLINE_TIME,
-                'verified': verified_online_time,
-                'claimed': user.daily_online_time
-            }), 400
-        
-        # Calculate dynamic bonus based on user trustworthiness
-        base_bonus = DAILY_REWARD
-        trust_multiplier = calculate_trust_multiplier(user)
-        final_bonus = base_bonus * trust_multiplier
-        
-        old_balance = user.balance_usd
-        user.balance_usd = float(user.balance_usd or 0) + final_bonus
-        
-        # Update bonus tracking fields
-        user.daily_bonus_given = True
-        user.last_bonus_date = today
-        user.last_bonus_claim = datetime.utcnow()
-        user.total_daily_bonuses += 1
-        
-        # Enhanced consecutive days calculation
-        user.consecutive_days = calculate_consecutive_days(user, today)
-        
-        # Update positive behavioral indicators
-        update_positive_daily_behaviors(user, behavioral_data)
-        
-        # Log earning with enhanced tracking
-        earning = Earning(
-            user_id=user.id,
-            amount=final_bonus,
-            source='daily_bonus'
-        )
-        db.session.add(earning)
-        
-        # Update device fingerprint
-        update_device_fingerprint(user_id, device_data, user_agent)
-        
-        # Update geolocation
-        update_user_geolocation(user_id, user_ip)
-        
-        # Log legitimate daily bonus claim
-        log_security_event(user_id, 'daily_bonus_claimed', 'low',
-                         f'Legitimate daily bonus claim: ${final_bonus:.2f}',
-                         additional_data={
-                             'trust_multiplier': trust_multiplier,
-                             'verified_online_time': verified_online_time,
-                             'consecutive_days': user.consecutive_days
-                         })
-        
-        db.session.commit()
-        
-        print(f"✅ Enhanced daily bonus claimed: User {user.id}, Amount: {final_bonus}, Trust: {trust_multiplier}")
-        
-        return jsonify({
-            'success': True,
-            'bonus': final_bonus,
-            'base_bonus': base_bonus,
-            'trust_multiplier': trust_multiplier,
-            'old_balance': old_balance,
-            'new_balance': user.balance_usd,
-            'consecutive_days': user.consecutive_days,
-            'verified_online_time': verified_online_time,
-            'behavioral_score': user.behavioral_score,
-            'risk_level': user.risk_level,
-            'message': f'Daily bonus of ${final_bonus:.2f} claimed successfully!'
-        })
-        
-    except Exception as e:
-        print(f"❌ Enhanced daily bonus error: {str(e)}")
-        db.session.rollback()
-        return jsonify({'error': f'Failed to claim bonus: {str(e)}'}), 500
+
 
 # Helper functions for enhanced anti-cheat
 
@@ -3263,3 +3139,169 @@ else:
     # For production deployment (like Render)
     # Initialize database when app is imported
     init_db()
+
+
+class Payout(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), default="pending")
+    requested_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+
+@app.route('/api/claim_daily_bonus', methods=['POST'])
+def claim_daily_bonus():
+    """Claim daily bonus with comprehensive fraud prevention"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid request'}), 400
+
+        behavioral_data = data.get('behavioral_data', {})
+        device_data = data.get('device_data', {})
+
+        user_id = session['user_id']
+        user_ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+
+        user = User.query.get(user_id)
+
+        if not user or user.is_banned:
+            return jsonify({'error': 'Account unavailable'}), 403
+
+        fraud_detected, fraud_reasons = detect_daily_bonus_fraud(
+            user, user_ip, user_agent, behavioral_data, device_data
+        )
+
+        if fraud_detected:
+            user.suspicious_activity_count += 1
+            user.risk_level = 'high'
+
+            log_security_event(user_id, 'daily_bonus_fraud', 'high',
+                               f'Daily bonus fraud attempt: {"; ".join(fraud_reasons)}')
+
+            db.session.commit()
+            return jsonify({
+                'error': 'Suspicious activity detected',
+                'reasons': fraud_reasons,
+                'risk_level': user.risk_level
+            }), 400
+
+        now = datetime.utcnow()
+        last_claimed = user.last_bonus_claim or datetime.min
+        if (now - last_claimed).days < 1:
+            return jsonify({'error': 'Daily bonus already claimed'}), 403
+
+        user.balance += DAILY_REWARD
+        user.last_bonus_claim = now
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'reward': DAILY_REWARD,
+            'new_balance': user.balance
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Enhanced daily bonus error: {e}")
+        return jsonify({'error': 'Server error'}), 500
+
+
+
+@app.route('/heartbeat', methods=['POST'])
+def heartbeat():
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Not logged in'}), 401
+
+        data = request.get_json() or {}
+        fingerprint = data.get('fingerprint', '')
+        ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+
+        fingerprint_hash = generate_fingerprint_hash(fingerprint)
+        is_proxy = detect_proxy_vpn(ip)
+
+        return jsonify({
+            'fingerprint_hash': fingerprint_hash,
+            'is_proxy': is_proxy
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Heartbeat error: {e}")
+        return jsonify({'error': 'Heartbeat failed'}), 500
+
+
+
+@app.route('/api/balance', methods=['GET'])
+def api_balance():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    return jsonify({
+        'balance': user.balance,
+        'risk_level': user.risk_level,
+        'suspicious_activity_count': user.suspicious_activity_count
+    }), 200
+
+
+
+@app.route('/api/history', methods=['GET'])
+def api_history():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    earnings = Earning.query.filter_by(user_id=session['user_id']).order_by(Earning.timestamp.desc()).limit(20).all()
+
+    history_data = [{
+        'amount': e.amount,
+        'source': e.source,
+        'timestamp': e.timestamp.isoformat()
+    } for e in earnings]
+
+    return jsonify({'history': history_data}), 200
+
+
+
+@app.route('/user_dashboard')
+def user_dashboard():
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return redirect(url_for('login'))
+
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        session.clear()
+        return redirect(url_for('login'))
+
+    recent_earnings = Earning.query.filter_by(user_id=user.id)        .order_by(Earning.timestamp.desc())        .limit(10).all()
+
+    videos = Video.query.filter_by(is_active=True)        .order_by(Video.timestamp.desc()).all()
+
+    can_watch_more = check_daily_video_limit(user.id)
+    time_until_daily_bonus = max(0, DAILY_ONLINE_TIME - (user.daily_online_time or 0))
+    videos_remaining = max(0, MAX_VIDEOS_PER_DAY - (user.videos_watched_today or 0))
+
+    return render_template('user_dashboard.html',
+        user=user,
+        earnings=recent_earnings,
+        videos=videos,
+        can_watch_more=can_watch_more,
+        videos_remaining=videos_remaining,
+        time_until_daily_bonus=time_until_daily_bonus,
+        MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
+        DAILY_ONLINE_TIME=DAILY_ONLINE_TIME
+    )
+
+
+
+MAX_VIDEOS_PER_DAY = 10
+DAILY_ONLINE_TIME = 1800  # seconds
