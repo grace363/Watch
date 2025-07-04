@@ -818,5 +818,44 @@
             .catch(error => console.error('Balance update error:', error));
         }, 30000);
     </script>
+function claimDailyBonus() {
+    const claimBtn = document.getElementById('claimBonusBtn');
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    
+    // Disable button to prevent double-clicking
+    claimBtn.disabled = true;
+    claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+    
+    // Send AJAX request to backend
+    fetch('/claim-daily-bonus', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            online_time: currentOnlineTime,
+            focus_lost_count: focusLostCount
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            location.reload(); // Refresh page to update balance
+        } else {
+            // Show error message
+            alert(data.message || 'Failed to claim bonus');
+            claimBtn.disabled = false;
+            claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim $0.05 Bonus';
+        }
+    })
+    .catch(error => {
+        console.error('Error claiming bonus:', error);
+        alert('Network error. Please try again.');
+        claimBtn.disabled = false;
+        claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim $0.05 Bonus';
+    });
+}
 </body>
 </html>
