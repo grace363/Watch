@@ -1087,6 +1087,7 @@ def logout():
 
 @app.route('/user_dashboard')
 def user_dashboard():
+    """Main user dashboard route - serves React component or template"""
     if 'user_id' not in session or session.get('account_type') != 'User':
         return redirect(url_for('login'))
     
@@ -1095,65 +1096,302 @@ def user_dashboard():
         session.clear()
         return redirect(url_for('login'))
     
-    # Get recent earnings
-    recent_earnings = Earning.query.filter_by(user_id=user.id)\
-        .order_by(Earning.timestamp.desc())\
-        .limit(10).all()
+    # If this is an API request (Accept: application/json), return JSON
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'balance_usd': float(user.balance_usd or 0),
+                'videos_watched_today': user.videos_watched_today or 0,
+                'total_watch_minutes': user.total_watch_minutes or 0,
+                'daily_bonus_given': user.daily_bonus_given,
+                'daily_online_time': user.daily_online_time or 0,
+                'account_type': user.account_type,
+                'consecutive_days': user.consecutive_days or 0
+            }
+        })
+    
+    # For regular browser requests, serve the React component or template
+    # If you're using React, you might render a template that loads the React app
+    return render_template('user_dashboard_react.html', user=user)
+
+# Alternative: If you want to serve the React component directly
+@app.route('/dashboard')
+def dashboard_react():
+    """Serve React dashboard component"""
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return redirect(url_for('login'))
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    # Serve a template that loads your React component
+    return render_template('dashboard.html', user=user)
+
+# Add these database model updates if you don't have them
+def init_db_columns():
+    """Add any missing columns to existing tables"""
+    try:
+        # Add columns if they don't exist
+        with app.app_context():
+            db.create_all()
+            
+            # You might need to add these columns to your User model:
+            # daily_online_time = db.Column(db.Integer, default=0)
+            # videos_watched_today = db.Column(db.Integer, default=0)
+            # total_watch_minutes = db.Column(db.Integer, default=0)
+            # daily_bonus_given = db.Column(db.Boolean, default=False)
+            # consecutive_days = db.Column(db.Integer, default=0)
+            
+    except Exception as e:
+        print(f"Database initialization error: {e}")
+
+# Daily reset function (call this with a cron job or scheduler)
+def reset_daily_stats():
+    """Reset daily statistics for all users"""
+    try:
+        users = User.query.all()
+        for user in users:
+            user.daily_bonus_given = False
+            user.daily_online_time = 0
+            user.videos_watched_today = 0
+        
+        db.session.commit()
+        print("Daily stats reset completed")
+    except Exception as e:
+        print(f"Error resetting daily stats: {e}")
+        db.session.rollback()
+
+# Additional Flask routes to match your React frontend API calls
+
+@app.route('/api/user/profile')
+def api_user_profile():
+    """API endpoint to get user profile data"""
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        session.clear()
+        return jsonify({'error': 'User not found or banned'}), 404
+    
+    return jsonify({
+        'id': user.id,
+        'email': user.email,
+        'balance_usd': float(user.balance_usd or 0),
+        'videos_watched_today': user.videos_watched_today or 0,
+        'total_watch_minutes': user.total_watch_minutes or 0,
+        'daily_bonus_given': user.daily_bonus_given,
+        'daily_online_time': user.daily_online_time or 0,
+        'account_type': user.account_type,
+        'consecutive_days': user.consecutive_days or 0,
+        'is_banned': user.is_banned
+    })
+
+@app.route('/api/videos/available')
+def api_videos_available():
+    """API endpoint to get available videos"""
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        return jsonify({'error': 'User not found or banned'}), 404
     
     # Get available videos
     videos = Video.query.filter_by(is_active=True)\
         .order_by(Video.timestamp.desc()).all()
     
-    # Check daily limits
-    can_watch_more = check_daily_video_limit(user.id)
-    time_until_daily_bonus = max(0, DAILY_ONLINE_TIME - (user.daily_online_time or 0))
+    videos_data = []
+    for video in videos:
+        videos_data.append({
+            'id': video.id,
+            'title': video.title,
+            'reward_amount': float(video.reward_amount or VIDEO_REWARD_AMOUNT),
+            'min_watch_time': video.min_watch_time or VIDEO_WATCH_TIME,
+            'added_by': video.added_by,
+            'timestamp': video.timestamp.isoformat() if video.timestamp else None
+        })
     
-    # Calculate videos remaining today
-    videos_remaining = max(0, MAX_VIDEOS_PER_DAY - (user.videos_watched_today or 0))
+    return jsonify({
+        'videos': videos_data,
+        'can_watch_more': check_daily_video_limit(user.id),
+        'videos_remaining': max(0, MAX_VIDEOS_PER_DAY - (user.videos_watched_today or 0))
+    })
+
+@app.route('/api/heartbeat', methods=['POST'])
+def api_heartbeat():
+    """API endpoint for session heartbeat tracking"""
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return jsonify({'error': 'Unauthorized'}), 401
     
-    return render_template('user_dashboard.html', 
-                         user=user, 
-                         earnings=recent_earnings,
-                         videos=videos,
-                         can_watch_more=can_watch_more,
-                         videos_remaining=videos_remaining,
-                         time_until_daily_bonus=time_until_daily_bonus,
-                         # Add all missing template variables
-                         MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
-                         DAILY_ONLINE_TIME=DAILY_ONLINE_TIME,
-                         DAILY_REWARD=DAILY_REWARD,
-                         SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
-                         VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
-
-# Configuration for file uploads - moved to environment variables
-UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads/videos')
-ALLOWED_EXTENSIONS = set(os.environ.get('ALLOWED_EXTENSIONS', 'mp4,avi,mov,wmv,flv,webm,mkv').split(','))
-MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', str(500 * 1024 * 1024)))  # Default 500MB
-VIDEO_WATCH_TIME = int(os.environ.get('VIDEO_WATCH_TIME', '30'))  # Default 30 seconds
-VIDEO_REWARD_AMOUNT = float(os.environ.get('VIDEO_REWARD_AMOUNT', '0.01'))  # Default $0.01
-DAILY_VIDEO_LIMIT = int(os.environ.get('DAILY_VIDEO_LIMIT', '50'))  # Default 50 videos per day
-MAX_FILE_SIZE_MB = int(os.environ.get('MAX_FILE_SIZE_MB', '500'))  # Default 500MB
-
-# Add to your app configuration
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
-
-# Create upload directory if it doesn't exist
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-def allowed_file(filename):
-    """Check if file extension is allowed"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def get_file_size_mb(file_path):
-    """Get file size in MB"""
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        return jsonify({'error': 'User not found or banned'}), 404
+    
     try:
-        size_bytes = os.path.getsize(file_path)
-        size_mb = size_bytes / (1024 * 1024)
-        return round(size_mb, 2)
-    except:
-        return 0
+        data = request.get_json()
+        session_token = data.get('session_token')
+        heartbeat_type = data.get('type', 'daily')
+        behavioral_data = data.get('behavioral_data', {})
+        
+        # Update user's daily online time
+        if heartbeat_type == 'daily':
+            current_time = user.daily_online_time or 0
+            new_time = min(current_time + 5, DAILY_ONLINE_TIME)  # 5 seconds per heartbeat
+            user.daily_online_time = new_time
+            
+            # Optional: Log behavioral data for fraud detection
+            if behavioral_data:
+                # You could store this in a separate table for analysis
+                pass
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'online_time': new_time,
+                'time_remaining': max(0, DAILY_ONLINE_TIME - new_time)
+            })
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        return jsonify({'error': 'Invalid request data'}), 400
+
+@app.route('/api/claim_daily_bonus', methods=['POST'])
+def api_claim_daily_bonus():
+    """API endpoint to claim daily bonus"""
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        return jsonify({'error': 'User not found or banned'}), 404
+    
+    try:
+        data = request.get_json()
+        behavioral_data = data.get('behavioral_data', {})
+        device_data = data.get('device_data', {})
+        
+        # Check if bonus already claimed today
+        if user.daily_bonus_given:
+            return jsonify({'error': 'Daily bonus already claimed'}), 400
+        
+        # Check if user has been online long enough
+        if (user.daily_online_time or 0) < DAILY_ONLINE_TIME:
+            return jsonify({
+                'error': f'You need {DAILY_ONLINE_TIME - (user.daily_online_time or 0)} more seconds online'
+            }), 400
+        
+        # Calculate bonus amount (could vary based on consecutive days)
+        consecutive_days = (user.consecutive_days or 0) + 1
+        bonus_amount = DAILY_REWARD
+        
+        # Optional: Increase bonus for consecutive days
+        if consecutive_days >= 7:
+            bonus_amount *= 1.5  # 50% bonus for week streak
+        elif consecutive_days >= 3:
+            bonus_amount *= 1.2  # 20% bonus for 3+ days
+        
+        # Update user balance and status
+        user.balance_usd = (user.balance_usd or 0) + bonus_amount
+        user.daily_bonus_given = True
+        user.consecutive_days = consecutive_days
+        user.daily_online_time = 0  # Reset for next day
+        
+        # Record the earning
+        earning = Earning(
+            user_id=user.id,
+            amount=bonus_amount,
+            source='daily_bonus',
+            description=f'Daily bonus - Day {consecutive_days}'
+        )
+        db.session.add(earning)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'bonus_amount': bonus_amount,
+            'new_balance': float(user.balance_usd),
+            'consecutive_days': consecutive_days
+        })
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to claim bonus'}), 500
+
+@app.route('/api/watch_video', methods=['POST'])
+def api_watch_video():
+    """API endpoint to start watching a video"""
+    if 'user_id' not in session or session.get('account_type') != 'User':
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = User.query.get(session['user_id'])
+    if not user or user.is_banned:
+        return jsonify({'error': 'User not found or banned'}), 404
+    
+    try:
+        data = request.get_json()
+        video_id = data.get('video_id')
+        session_token = data.get('session_token')
+        
+        if not video_id:
+            return jsonify({'error': 'Video ID required'}), 400
+        
+        # Check daily video limit
+        if not check_daily_video_limit(user.id):
+            return jsonify({'error': 'Daily video limit reached'}), 400
+        
+        # Get video details
+        video = Video.query.get(video_id)
+        if not video or not video.is_active:
+            return jsonify({'error': 'Video not found or inactive'}), 404
+        
+        # Create watch session (you might want to create a WatchSession model)
+        min_watch_time = video.min_watch_time or VIDEO_WATCH_TIME
+        reward_amount = video.reward_amount or VIDEO_REWARD_AMOUNT
+        
+        # You could create a watch session record here
+        # watch_session = WatchSession(
+        #     user_id=user.id,
+        #     video_id=video_id,
+        #     session_token=session_token,
+        #     min_watch_time=min_watch_time,
+        #     reward_amount=reward_amount
+        # )
+        # db.session.add(watch_session)
+        # db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'video_id': video_id,
+            'min_watch_time': min_watch_time,
+            'reward_amount': reward_amount,
+            'watch_url': f'/watch/{video_id}',
+            'session_token': session_token
+        })
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to start video session'}), 500
+
+# Helper function for daily video limit check
+def check_daily_video_limit(user_id):
+    """Check if user can watch more videos today"""
+    user = User.query.get(user_id)
+    if not user:
+        return False
+    
+    videos_watched_today = user.videos_watched_today or 0
+    return videos_watched_today < MAX_VIDEOS_PER_DAY
+
+# Constants that should match your React frontend
+MAX_VIDEOS_PER_DAY = int(os.environ.get('MAX_VIDEOS_PER_DAY', '50'))
+DAILY_ONLINE_TIME = int(os.environ.get('DAILY_ONLINE_TIME', '3600'))  # 1 hour
+DAILY_REWARD = float(os.environ.get('DAILY_REWARD', '0.50'))
+SESSION_HEARTBEAT_INTERVAL = int(os.environ.get('SESSION_HEARTBEAT_INTERVAL', '5'))  # 5 seconds
 
 @app.route('/admin_panel')
 def admin_panel():
@@ -1363,76 +1601,6 @@ def admin_delete_video(video_id):
         flash('Error deleting video.', 'error')
         return redirect(url_for('admin_panel'))
 
-# Update your existing watch_video route to handle both file types
-@app.route('/watch_video/<int:video_id>')
-def watch_video(video_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    user = User.query.get(session['user_id'])
-    if not user or user.is_banned:
-        return redirect(url_for('login'))
-    
-    if not check_daily_video_limit(user.id):
-        flash(f'❌ Daily video limit ({DAILY_VIDEO_LIMIT}) reached. Come back tomorrow!', 'error')
-        return redirect(url_for('user_dashboard'))
-    
-    video = Video.query.get_or_404(video_id)
-    if not video.is_active:
-        flash('❌ This video is no longer available.', 'error')
-        return redirect(url_for('user_dashboard'))
-    
-    # Create watch session
-    session_token = create_session_token()
-    watch_session = WatchSession(
-        user_id=user.id,
-        video_id=video.id,
-        session_token=session_token,
-        ip_address=get_client_ip(),
-        user_agent=request.headers.get('User-Agent', 'Unknown')
-    )
-    
-    db.session.add(watch_session)
-    db.session.commit()
-    
-    return render_template('watch_video.html', 
-                         video=video, 
-                         session_token=session_token,
-                         min_watch_time=VIDEO_WATCH_TIME)
-
-# Helper function for templates
-def get_youtube_embed_url(youtube_url):
-    """Convert YouTube URL to embed URL"""
-    try:
-        if 'youtube.com/watch' in youtube_url:
-            video_id = youtube_url.split('v=')[1].split('&')[0]
-        elif 'youtu.be/' in youtube_url:
-            video_id = youtube_url.split('youtu.be/')[1].split('?')[0]
-        else:
-            return youtube_url
-        
-        return f"https://www.youtube.com/embed/{video_id}"
-    except:
-        return youtube_url
-
-# Security helper function
-# Security helper function
-def check_daily_video_limit(user_id):
-    """Check if user has exceeded daily video watch limit"""
-    from datetime import datetime, timedelta
-    
-    today = datetime.utcnow().date()
-    start_of_day = datetime.combine(today, datetime.min.time())
-    
-    # Count videos watched today
-    videos_watched_today = WatchSession.query.filter(
-        WatchSession.user_id == user_id,
-        WatchSession.start_time >= start_of_day,
-        WatchSession.reward_given == True
-    ).count()
-    
-    return videos_watched_today < DAILY_VIDEO_LIMIT
-
 # Make helper functions available in templates
 @app.context_processor
 def utility_processor():
@@ -1445,123 +1613,6 @@ def utility_processor():
         video_reward_amount=VIDEO_REWARD_AMOUNT,
         daily_video_limit=DAILY_VIDEO_LIMIT
     )
-
-@app.route('/api/heartbeat', methods=['POST'])
-def heartbeat():
-    """Keep track of user activity and session with enhanced anti-cheat"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    
-    try:
-        data = request.get_json()
-        session_token = data.get('session_token')
-        session_type = data.get('type', 'video')  # 'video' or 'daily'
-        focus_lost = data.get('focus_lost', 0)
-        back_button = data.get('back_button', False)
-        
-        # Get additional anti-cheat data
-        mouse_data = data.get('mouse_data', {})
-        keyboard_data = data.get('keyboard_data', {})
-        screen_data = data.get('screen_data', {})
-        behavioral_data = data.get('behavioral_data', {})
-        
-        user_id = session['user_id']
-        user_ip = request.remote_addr
-        user_agent = request.headers.get('User-Agent', '')
-        
-        # Update device fingerprint if changed
-        update_device_fingerprint(user_id, screen_data, user_agent)
-        
-        # Check for proxy/VPN
-        is_proxy = detect_proxy_vpn(user_ip)
-        if is_proxy:
-            log_security_event(user_id, 'proxy_detected', 'medium', 
-                             f'Proxy/VPN detected from IP: {user_ip}')
-        
-        if session_type == 'video' and session_token:
-            watch_session = WatchSession.query.filter_by(session_token=session_token).first()
-            if watch_session and watch_session.user_id == user_id:
-                # Update basic session data
-                watch_session.focus_lost_count = focus_lost
-                watch_session.back_button_pressed = back_button
-                watch_session.watch_duration = data.get('watch_duration', 0)
-                watch_session.user_agent = user_agent
-                watch_session.ip_address = user_ip
-                
-                # Store mouse movement data for bot detection
-                if mouse_data:
-                    store_mouse_movements(watch_session.id, mouse_data)
-                
-                # Store keystroke patterns
-                if keyboard_data:
-                    store_keystroke_patterns(user_id, session_token, keyboard_data)
-                
-                # Advanced cheat detection
-                cheat_detected, cheat_reasons = advanced_cheat_detection(
-                    watch_session, mouse_data, behavioral_data, is_proxy
-                )
-                
-                if cheat_detected:
-                    watch_session.cheating_detected = True
-                    watch_session.cheat_reason = '; '.join(cheat_reasons)
-                    watch_session.is_suspicious = True
-                    
-                    # Log security event
-                    log_security_event(user_id, 'cheating_detected', 'high', 
-                                     f'Cheating detected: {"; ".join(cheat_reasons)}')
-                    
-                    # Update user risk score
-                    update_user_risk_score(user_id, cheat_reasons)
-                
-                # Calculate and store risk score
-                risk_score = calculate_session_risk_score(watch_session, mouse_data, behavioral_data)
-                store_risk_score(user_id, watch_session.id, risk_score)
-                
-                db.session.commit()
-                return jsonify({
-                    'success': True, 
-                    'cheating': watch_session.cheating_detected,
-                    'risk_level': risk_score.get('risk_level', 'low'),
-                    'suspicious': watch_session.is_suspicious
-                })
-        
-        elif session_type == 'daily':
-            # Update daily session with enhanced tracking
-            user = User.query.get(user_id)
-            user.last_heartbeat = datetime.utcnow()
-            user.last_ip_address = user_ip
-            
-            # Update geolocation data
-            update_user_geolocation(user_id, user_ip)
-            
-            # Calculate online time
-            if user.session_start_time:
-                online_time = (datetime.utcnow() - user.session_start_time).total_seconds()
-                user.daily_online_time = min(int(online_time), DAILY_ONLINE_TIME)
-            
-            # Update behavioral scores
-            update_behavioral_scores(user, behavioral_data)
-            
-            # Check for automation/bot behavior
-            if detect_automation(behavioral_data, mouse_data):
-                user.automation_detected = True
-                log_security_event(user_id, 'automation_detected', 'high', 
-                                 'Bot-like behavior detected during daily session')
-            
-            db.session.commit()
-            return jsonify({
-                'success': True, 
-                'online_time': user.daily_online_time,
-                'required_time': DAILY_ONLINE_TIME,
-                'risk_level': user.risk_level,
-                'automation_detected': user.automation_detected
-            })
-            
-        return jsonify({'error': 'Invalid session'}), 400
-        
-    except Exception as e:
-        print(f"❌ Heartbeat error: {str(e)}")
-        return jsonify({'error': 'Heartbeat failed'}), 500
 
 @app.route('/api/complete_video', methods=['POST'])
 def complete_video():
@@ -2024,269 +2075,7 @@ def calculate_trust_multiplier(user):
     except Exception as e:
         print(f"⚠️ Trust multiplier calculation failed: {str(e)}")
         return 1.0
-
-@app.route('/api/claim_daily_bonus', methods=['POST'])
-def claim_daily_bonus():
-    """Claim daily bonus with comprehensive fraud prevention"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    
-    try:
-        data = request.get_json()
-        behavioral_data = data.get('behavioral_data', {})
-        device_data = data.get('device_data', {})
-        
-        user_id = session['user_id']
-        user_ip = request.remote_addr
-        user_agent = request.headers.get('User-Agent', '')
-        
-        user = User.query.get(user_id)
-        
-        if not user or user.is_banned:
-            return jsonify({'error': 'Account unavailable'}), 403
-        
-        # Enhanced fraud detection for daily bonus
-        fraud_detected, fraud_reasons = detect_daily_bonus_fraud(
-            user, user_ip, user_agent, behavioral_data, device_data
-        )
-        
-        if fraud_detected:
-            user.suspicious_activity_count += 1
-            user.risk_level = 'high'
-            
-            log_security_event(user_id, 'daily_bonus_fraud', 'high',
-                             f'Daily bonus fraud attempt: {"; ".join(fraud_reasons)}')
-            
-            db.session.commit()
-            return jsonify({
-                'error': 'Suspicious activity detected',
-                'reasons': fraud_reasons,
-                'risk_level': user.risk_level
-            }), 400
-        
-        # Reset daily data if needed
-        user = reset_daily_data_if_needed(user)
-        
-        # Get today's date for comparison
-        today = datetime.utcnow().date()
-        
-        # Check if bonus was already claimed today
-        if user.daily_bonus_given and user.last_bonus_date == today:
-            return jsonify({'error': 'Daily bonus already claimed today'}), 400
-        
-        # Enhanced online time verification
-        verified_online_time = verify_online_time_legitimacy(user, behavioral_data)
-        
-        if verified_online_time < DAILY_ONLINE_TIME:
-            return jsonify({
-                'error': f'Insufficient verified online time: {verified_online_time}s of {DAILY_ONLINE_TIME}s required',
-                'required': DAILY_ONLINE_TIME,
-                'verified': verified_online_time,
-                'claimed': user.daily_online_time
-            }), 400
-        
-        # Calculate dynamic bonus based on user trustworthiness
-        base_bonus = DAILY_REWARD
-        trust_multiplier = calculate_trust_multiplier(user)
-        
-        # Calculate consecutive days bonus
-        consecutive_bonus = 0
-        if user.last_bonus_date:
-            # Check if claimed yesterday
-            yesterday = today - timedelta(days=1)
-            if user.last_bonus_date == yesterday:
-                user.consecutive_days += 1
-            else:
-                user.consecutive_days = 1
-        else:
-            user.consecutive_days = 1
-        
-        # Add consecutive days bonus (up to 7 days)
-        consecutive_bonus = min(user.consecutive_days - 1, 6) * 0.1 * base_bonus
-        
-        # Calculate final bonus amount
-        final_bonus = (base_bonus + consecutive_bonus) * trust_multiplier
-        final_bonus = round(final_bonus, 2)
-        
-        # Update user balance and bonus status
-        user.balance_usd = (user.balance_usd or 0) + final_bonus
-        user.daily_bonus_given = True
-        user.last_bonus_date = today
-        user.last_bonus_claim = datetime.utcnow()
-        user.total_daily_bonuses = (user.total_daily_bonuses or 0) + 1
-        
-        # Reset daily tracking
-        user.daily_online_time = 0
-        user.session_start_time = None
-        
-        # Create earning record
-        earning = Earning(
-            user_id=user_id,
-            amount=final_bonus,
-            source='daily_bonus',
-            description=f'Daily bonus (Day {user.consecutive_days})',
-            ip_address=user_ip,
-            user_agent=user_agent,
-            created_at=datetime.utcnow()
-        )
-        db.session.add(earning)
-        
-        # Log successful bonus claim
-        log_security_event(user_id, 'daily_bonus_claimed', 'info',
-                         f'Daily bonus claimed: ${final_bonus:.2f}',
-                         additional_data={
-                             'base_bonus': base_bonus,
-                             'consecutive_bonus': consecutive_bonus,
-                             'trust_multiplier': trust_multiplier,
-                             'consecutive_days': user.consecutive_days,
-                             'new_balance': user.balance_usd
-                         })
-        
-        # Commit all changes
-        db.session.commit()
-        
-        print(f"✅ Daily bonus claimed: User {user_id}, Amount: ${final_bonus:.2f}, New Balance: ${user.balance_usd:.2f}")
-        
-        return jsonify({
-            'success': True,
-            'message': 'Daily bonus claimed successfully!',
-            'bonus_amount': final_bonus,
-            'new_balance': user.balance_usd,
-            'consecutive_days': user.consecutive_days,
-            'bonus_breakdown': {
-                'base_bonus': base_bonus,
-                'consecutive_bonus': consecutive_bonus,
-                'trust_multiplier': trust_multiplier,
-                'final_amount': final_bonus
-            },
-            'next_bonus_available': (today + timedelta(days=1)).isoformat()
-        }), 200
-        
-    except Exception as e:
-        print(f"❌ Daily bonus claim error: {str(e)}")
-        db.session.rollback()
-        
-        # Log the error
-        try:
-            log_security_event(session.get('user_id'), 'daily_bonus_error', 'high',
-                             f'Daily bonus claim error: {str(e)}')
-        except:
-            pass
-        
-        return jsonify({
-            'error': 'Failed to claim daily bonus',
-            'success': False,
-            'message': 'An error occurred while claiming your bonus. Please try again.'
-        }), 500
-
-
-# Helper functions you'll need to implement:
-
-def calculate_trust_multiplier(user):
-    """Calculate trust multiplier based on user behavior"""
-    try:
-        base_multiplier = 1.0
-        
-        # Reduce multiplier for high-risk users
-        if user.risk_level == 'high':
-            base_multiplier *= 0.5
-        elif user.risk_level == 'medium':
-            base_multiplier *= 0.8
-        
-        # Increase multiplier for trusted users
-        if user.cheat_violations == 0 and user.consecutive_days > 7:
-            base_multiplier *= 1.2
-        
-        # Account age bonus
-        if user.created_at:
-            days_old = (datetime.utcnow() - user.created_at).days
-            if days_old > 30:
-                base_multiplier *= 1.1
-        
-        return min(base_multiplier, 2.0)  # Cap at 2x
-    except:
-        return 1.0
-
-def detect_daily_bonus_fraud(user, ip_address, user_agent, behavioral_data, device_data):
-    """Detect potential fraud in daily bonus claims"""
-    fraud_reasons = []
-    
-    try:
-        # Check for rapid consecutive claims
-        if user.last_bonus_claim:
-            time_since_last = (datetime.utcnow() - user.last_bonus_claim).total_seconds()
-            if time_since_last < 3600:  # Less than 1 hour
-                fraud_reasons.append('Too soon since last claim')
-        
-        # Check for suspicious IP changes
-        if user.last_ip_address and user.last_ip_address != ip_address:
-            fraud_reasons.append('IP address changed')
-        
-        # Check behavioral patterns
-        if behavioral_data.get('mouse_movements', 0) < 10:
-            fraud_reasons.append('Insufficient mouse activity')
-        
-        if behavioral_data.get('click_count', 0) < 5:
-            fraud_reasons.append('Insufficient click activity')
-        
-        # Check for automation
-        if user.automation_detected:
-            fraud_reasons.append('Automation detected')
-        
-        # Check risk level
-        if user.risk_level == 'high':
-            fraud_reasons.append('High risk account')
-        
-        return len(fraud_reasons) > 0, fraud_reasons
-    except:
-        return False, []
-
-def verify_online_time_legitimacy(user, behavioral_data):
-    """Verify that claimed online time is legitimate"""
-    try:
-        claimed_time = user.daily_online_time or 0
-        
-        # Check if behavioral data supports claimed time
-        mouse_movements = behavioral_data.get('mouse_movements', 0)
-        click_count = behavioral_data.get('click_count', 0)
-        
-        # Minimum activity thresholds
-        min_mouse_per_minute = 2
-        min_clicks_per_minute = 1
-        
-        expected_minutes = claimed_time / 60
-        expected_mouse = expected_minutes * min_mouse_per_minute
-        expected_clicks = expected_minutes * min_clicks_per_minute
-        
-        # If activity is too low, reduce verified time
-        if mouse_movements < expected_mouse * 0.5 or click_count < expected_clicks * 0.5:
-            return int(claimed_time * 0.5)  # Reduce by 50%
-        
-        return claimed_time
-    except:
-        return user.daily_online_time or 0
-
-def reset_daily_data_if_needed(user):
-    """Reset daily data if it's a new day"""
-    try:
-        today = datetime.utcnow().date()
-        
-        # If last activity was yesterday or earlier, reset daily data
-        if user.last_activity_date != today:
-            user.daily_online_time = 0
-            user.daily_bonus_given = False
-            user.videos_watched_today = 0
-            user.session_start_time = None
-            user.last_activity_date = today
-            user.focus_lost_count = 0
-            user.back_button_pressed = False
-        
-        return user
-    except:
-        return user
-
-# Add these routes to your existing app.py file
-
+ 
 @app.route('/youtuber_dashboard')
 def youtuber_dashboard():
     """YouTuber dashboard route"""
