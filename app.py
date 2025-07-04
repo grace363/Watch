@@ -577,327 +577,7 @@ def create_session_token():
     """Create a unique session token"""
     return secrets.token_urlsafe(32)
 
-def check_daily_video_limit(user_id):
-    """Check if user has reached daily video limit"""
-    user = User.query.get(user_id)
-    if not user:
-        return False
-        
-    today = datetime.utcnow().date()
-    
-    # Reset daily count if it's a new day
-    if not user.last_video_date or user.last_video_date != today:
-        user.videos_watched_today = 0
-        user.last_video_date = today
-        try:
-            db.session.commit()
-        except Exception as e:
-            logging.error(f"Failed to reset video count for user {user_id}: {str(e)}")
-            db.session.rollback()
-    
-    return user.videos_watched_today < MAX_VIDEOS_PER_DAY
 
-def is_user_banned(user_id):
-    """Check if user is banned"""
-    user = User.query.get(user_id)
-    return user and user.is_banned
-
-def ban_user(user_id, reason):
-    """Ban user for cheating"""
-    user = User.query.get(user_id)
-    if user:
-        user.is_banned = True
-        user.ban_reason = reason
-        user.cheat_violations += 1
-        try:
-            db.session.commit()
-            logging.warning(f"🚨 User {user_id} banned: {reason}")
-        except Exception as e:
-            logging.error(f"Failed to ban user {user_id}: {str(e)}")
-            db.session.rollback()
-
-def detect_cheating(watch_session):
-    """Detect various cheating methods"""
-    cheating_detected = False
-    reasons = []
-    
-    # Check if watch session exists and has required data
-    if not watch_session:
-        return False, []
-    
-    # 1. Check for impossible watch speeds
-    if watch_session.video_length and watch_session.watch_duration:
-        watch_ratio = watch_session.watch_duration / watch_session.video_length
-        if watch_ratio > 1.5:  # Watched 50% faster than possible
-            cheating_detected = True
-            reasons.append("Impossible watch speed detected")
-    
-    # 2. Check for too short watch time
-    if watch_session.watch_duration and watch_session.watch_duration < MIN_WATCH_TIME:
-        cheating_detected = True
-        reasons.append("Watch time too short")
-    
-    # 3. Check for session duration anomalies
-    if watch_session.start_time and watch_session.end_time:
-        actual_duration = (watch_session.end_time - watch_session.start_time).total_seconds()
-        if watch_session.watch_duration > actual_duration * 1.2:  # 20% tolerance
-            cheating_detected = True
-            reasons.append("Watch duration exceeds session time")
-    
-    # 4. Check for multiple sessions from same IP in short time
-    recent_sessions = WatchSession.query.filter(
-        WatchSession.ip_address == watch_session.ip_address,
-        WatchSession.start_time >= datetime.utcnow() - timedelta(minutes=5),
-        WatchSession.user_id != watch_session.user_id
-    ).count()
-    
-    if recent_sessions > 3:  # More than 3 different users from same IP in 5 minutes
-        cheating_detected = True
-        reasons.append("Multiple accounts from same IP")
-    
-    # 5. Check if back button was pressed
-    if watch_session.back_button_pressed:
-        cheating_detected = True
-        reasons.append("Back button pressed")
-    
-    # 6. Check excessive focus loss
-    if watch_session.focus_lost_count > ANTI_CHEAT_TOLERANCE:
-        cheating_detected = True
-        reasons.append(f"Lost focus {watch_session.focus_lost_count} times")
-    
-    # 7. Check if watch duration is suspiciously short
-    if watch_session.watch_duration < VIDEO_WATCH_TIME - 5:  # 5 second tolerance
-        cheating_detected = True
-        reasons.append("Insufficient watch time")
-    
-    # 8. Check if session was too fast (impossible timing)
-    if watch_session.end_time and watch_session.start_time:
-        actual_duration = (watch_session.end_time - watch_session.start_time).total_seconds()
-        if actual_duration < VIDEO_WATCH_TIME - 10:  # 10 second tolerance
-            cheating_detected = True
-            reasons.append("Session completed too quickly")
-    
-    return cheating_detected, reasons
-
-# Additional helper functions you'll need:
-
-def start_watch_session(user_id, video_id, video_length, ip_address, user_agent):
-    """Start a new watch session"""
-    user = User.query.get(user_id)
-    if not user or user.is_banned:
-        return None, "User not found or banned"
-    
-    # Check daily limits
-    if not check_daily_video_limit(user_id):
-        return None, "Daily video limit reached"
-    
-    # Reset daily data if needed
-    reset_daily_data_if_needed(user)
-    
-    # Create new watch session
-    watch_session = WatchSession(
-        user_id=user_id,
-        video_id=video_id,
-        video_length=video_length,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        start_time=datetime.utcnow()
-    )
-    
-    try:
-        db.session.add(watch_session)
-        db.session.commit()
-        logging.info(f"Started watch session for user {user_id}, video {video_id}")
-        return watch_session, "Success"
-    except Exception as e:
-        logging.error(f"Failed to start watch session: {str(e)}")
-        db.session.rollback()
-        return None, "Database error"
-
-def end_watch_session(session_id, watch_duration):
-    """End a watch session and check for cheating"""
-    watch_session = WatchSession.query.get(session_id)
-    if not watch_session:
-        return False, "Session not found"
-    
-    # Update session end time and duration
-    watch_session.end_time = datetime.utcnow()
-    watch_session.watch_duration = watch_duration
-    
-    # Check for cheating
-    is_cheating, cheat_reasons = detect_cheating(watch_session)
-    
-    if is_cheating:
-        watch_session.is_suspicious = True
-        ban_user(watch_session.user_id, f"Cheating detected: {', '.join(cheat_reasons)}")
-        
-        try:
-            db.session.commit()
-        except Exception as e:
-            logging.error(f"Failed to mark session as suspicious: {str(e)}")
-            db.session.rollback()
-        
-        return False, f"Cheating detected: {', '.join(cheat_reasons)}"
-    
-    # Mark as completed and update user stats
-    watch_session.is_completed = True
-    user = User.query.get(watch_session.user_id)
-    
-    if user:
-        user.videos_watched_today += 1
-        user.total_watch_time += watch_duration
-        user.daily_online_time += watch_duration
-        
-        # Check if daily online time exceeded
-        if user.daily_online_time > MAX_DAILY_ONLINE_TIME:
-            ban_user(user.id, "Exceeded maximum daily online time")
-            try:
-                db.session.commit()
-            except Exception as e:
-                logging.error(f"Failed to update user stats: {str(e)}")
-                db.session.rollback()
-            return False, "Daily time limit exceeded"
-    
-    try:
-        db.session.commit()
-        logging.info(f"Completed watch session {session_id} for user {watch_session.user_id}")
-        return True, "Session completed successfully"
-    except Exception as e:
-        logging.error(f"Failed to complete watch session: {str(e)}")
-        db.session.rollback()
-        return False, "Database error"
-
-def get_user_stats(user_id):
-    """Get comprehensive user statistics"""
-    user = User.query.get(user_id)
-    if not user:
-        return None
-    
-    today = datetime.utcnow().date()
-    
-    # Reset daily data if needed
-    reset_daily_data_if_needed(user)
-    
-    stats = {
-        'user_id': user.id,
-        'username': user.username,
-        'videos_watched_today': user.videos_watched_today,
-        'daily_online_time': user.daily_online_time,
-        'daily_bonus_given': user.daily_bonus_given,
-        'consecutive_days': user.consecutive_days,
-        'total_watch_time': user.total_watch_time,
-        'is_banned': user.is_banned,
-        'ban_reason': user.ban_reason,
-        'videos_remaining_today': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
-        'can_watch_more': user.videos_watched_today < MAX_VIDEOS_PER_DAY and not user.is_banned
-    }
-    
-    return stats
-
-def cleanup_old_sessions():
-    """Clean up old watch sessions (run this periodically)"""
-    cutoff_date = datetime.utcnow() - timedelta(days=30)
-    
-    try:
-        old_sessions = WatchSession.query.filter(WatchSession.created_at < cutoff_date).delete()
-        db.session.commit()
-        logging.info(f"Cleaned up {old_sessions} old watch sessions")
-    except Exception as e:
-        logging.error(f"Failed to cleanup old sessions: {str(e)}")
-        db.session.rollback()
-
-def validate_session_token(user_id, token):
-    """Validate user session token"""
-    user = User.query.get(user_id)
-    if not user or user.session_token != token:
-        return False
-    return True
-
-def update_user_session(user_id, ip_address):
-    """Update user session info"""
-    user = User.query.get(user_id)
-    if user:
-        user.last_ip_address = ip_address
-        user.updated_at = datetime.utcnow()
-        
-        # Generate new session token if doesn't exist
-        if not user.session_token:
-            user.session_token = create_session_token()
-        
-        try:
-            db.session.commit()
-        except Exception as e:
-            logging.error(f"Failed to update user session: {str(e)}")
-            db.session.rollback()
-    
-    return user
-
-def reset_daily_stats():
-    """Reset daily stats for all users (run this daily via cron)"""
-    try:
-        users = User.query.all()
-        for user in users:
-            user.daily_bonus_given = False
-            user.videos_watched_today = 0
-            user.daily_online_time = 0
-        db.session.commit()
-        logging.info("✅ Daily stats reset for all users")
-    except Exception as e:
-        logging.error(f"❌ Failed to reset daily stats: {str(e)}")
-        db.session.rollback()
-
-def track_focus_loss(session_id):
-    """Track when user loses focus on video"""
-    watch_session = WatchSession.query.get(session_id)
-    if watch_session:
-        watch_session.focus_lost_count += 1
-        try:
-            db.session.commit()
-            logging.info(f"Focus loss tracked for session {session_id}, count: {watch_session.focus_lost_count}")
-        except Exception as e:
-            logging.error(f"Failed to track focus loss: {str(e)}")
-            db.session.rollback()
-
-def track_back_button_press(session_id):
-    """Track when user presses back button during video"""
-    watch_session = WatchSession.query.get(session_id)
-    if watch_session:
-        watch_session.back_button_pressed = True
-        try:
-            db.session.commit()
-            logging.warning(f"Back button press detected for session {session_id}")
-        except Exception as e:
-            logging.error(f"Failed to track back button press: {str(e)}")
-            db.session.rollback()
-
-#==== Utility Functions ====
-
-def send_email(to, subject, body, html_body=None): 
-    """Send email with both text and HTML versions"""
-    if not app.config.get('MAIL_SERVER'):
-        print(f"⚠️ Email not configured - would send to {to}: {subject}")
-        return True  # Return True in development to avoid blocking
-        
-    try:
-        msg = Message(
-            subject=subject, 
-            recipients=[to], 
-            body=body, 
-            html=html_body,
-            sender=app.config['MAIL_USERNAME']
-        ) 
-        mail.send(msg)
-        print(f"✅ Email sent successfully to {to}")
-        return True
-    except Exception as e:
-        print(f"❌ Failed to send email to {to}: {str(e)}")
-        return False
-
-def create_verification_email(email, verification_link):
-    """Create professional verification email content"""
-    
-    # Plain text version
-    text_body = f"""
 Welcome to Watch & Earn!
 
 Thank you for creating your account. To complete your registration and start earning, please verify your email address by clicking the link below:
@@ -1512,23 +1192,7 @@ def get_youtube_embed_url(youtube_url):
 
 # Security helper function
 # Security helper function
-def check_daily_video_limit(user_id):
-    """Check if user has exceeded daily video watch limit"""
-    from datetime import datetime, timedelta
-    
-    today = datetime.utcnow().date()
-    start_of_day = datetime.combine(today, datetime.min.time())
-    
-    # Count videos watched today
-    videos_watched_today = WatchSession.query.filter(
-        WatchSession.user_id == user_id,
-        WatchSession.start_time >= start_of_day,
-        WatchSession.reward_given == True
-    ).count()
-    
-    return videos_watched_today < DAILY_VIDEO_LIMIT
 
-# Make helper functions available in templates
 @app.context_processor
 def utility_processor():
     return dict(
@@ -3213,8 +2877,7 @@ def claim_daily_bonus():
         return jsonify({'error': 'Server error'}), 500
 
 
-def heartbeat():
-    try:
+
         user_id = session.get('user_id')
         if not user_id:
             return jsonify({'error': 'Not logged in'}), 401
@@ -3238,7 +2901,6 @@ def heartbeat():
 
 
 
-@app.route('/api/balance', methods=['GET'])
 def api_balance():
     if 'user_id' not in session:
         return jsonify({'error': 'Unauthorized'}), 401
@@ -3272,9 +2934,6 @@ def api_history():
 
 
 
-@app.route('/user_dashboard')
-def user_dashboard():
-    if 'user_id' not in session or session.get('account_type') != 'User':
         return redirect(url_for('login'))
 
     user = User.query.get(session['user_id'])
@@ -3307,3 +2966,327 @@ MAX_VIDEOS_PER_DAY = 10
 DAILY_ONLINE_TIME = 1800  # seconds
 
 
+
+
+
+def check_daily_video_limit(user_id):
+    """Check if user has reached daily video limit"""
+    user = User.query.get(user_id)
+    if not user:
+        return False
+        
+    today = datetime.utcnow().date()
+    
+    # Reset daily count if it's a new day
+    if not user.last_video_date or user.last_video_date != today:
+        user.videos_watched_today = 0
+        user.last_video_date = today
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Failed to reset video count for user {user_id}: {str(e)}")
+            db.session.rollback()
+    
+    return user.videos_watched_today < MAX_VIDEOS_PER_DAY
+
+def is_user_banned(user_id):
+    """Check if user is banned"""
+    user = User.query.get(user_id)
+    return user and user.is_banned
+
+def ban_user(user_id, reason):
+    """Ban user for cheating"""
+    user = User.query.get(user_id)
+    if user:
+        user.is_banned = True
+        user.ban_reason = reason
+        user.cheat_violations += 1
+        try:
+            db.session.commit()
+            logging.warning(f"🚨 User {user_id} banned: {reason}")
+        except Exception as e:
+            logging.error(f"Failed to ban user {user_id}: {str(e)}")
+            db.session.rollback()
+
+def detect_cheating(watch_session):
+    """Detect various cheating methods"""
+    cheating_detected = False
+    reasons = []
+    
+    # Check if watch session exists and has required data
+    if not watch_session:
+        return False, []
+    
+    # 1. Check for impossible watch speeds
+    if watch_session.video_length and watch_session.watch_duration:
+        watch_ratio = watch_session.watch_duration / watch_session.video_length
+        if watch_ratio > 1.5:  # Watched 50% faster than possible
+            cheating_detected = True
+            reasons.append("Impossible watch speed detected")
+    
+    # 2. Check for too short watch time
+    if watch_session.watch_duration and watch_session.watch_duration < MIN_WATCH_TIME:
+        cheating_detected = True
+        reasons.append("Watch time too short")
+    
+    # 3. Check for session duration anomalies
+    if watch_session.start_time and watch_session.end_time:
+        actual_duration = (watch_session.end_time - watch_session.start_time).total_seconds()
+        if watch_session.watch_duration > actual_duration * 1.2:  # 20% tolerance
+            cheating_detected = True
+            reasons.append("Watch duration exceeds session time")
+    
+    # 4. Check for multiple sessions from same IP in short time
+    recent_sessions = WatchSession.query.filter(
+        WatchSession.ip_address == watch_session.ip_address,
+        WatchSession.start_time >= datetime.utcnow() - timedelta(minutes=5),
+        WatchSession.user_id != watch_session.user_id
+    ).count()
+    
+    if recent_sessions > 3:  # More than 3 different users from same IP in 5 minutes
+        cheating_detected = True
+        reasons.append("Multiple accounts from same IP")
+    
+    # 5. Check if back button was pressed
+    if watch_session.back_button_pressed:
+        cheating_detected = True
+        reasons.append("Back button pressed")
+    
+    # 6. Check excessive focus loss
+    if watch_session.focus_lost_count > ANTI_CHEAT_TOLERANCE:
+        cheating_detected = True
+        reasons.append(f"Lost focus {watch_session.focus_lost_count} times")
+    
+    # 7. Check if watch duration is suspiciously short
+    if watch_session.watch_duration < VIDEO_WATCH_TIME - 5:  # 5 second tolerance
+        cheating_detected = True
+        reasons.append("Insufficient watch time")
+    
+    # 8. Check if session was too fast (impossible timing)
+    if watch_session.end_time and watch_session.start_time:
+        actual_duration = (watch_session.end_time - watch_session.start_time).total_seconds()
+        if actual_duration < VIDEO_WATCH_TIME - 10:  # 10 second tolerance
+            cheating_detected = True
+            reasons.append("Session completed too quickly")
+    
+    return cheating_detected, reasons
+
+# Additional helper functions you'll need:
+
+def start_watch_session(user_id, video_id, video_length, ip_address, user_agent):
+    """Start a new watch session"""
+    user = User.query.get(user_id)
+    if not user or user.is_banned:
+        return None, "User not found or banned"
+    
+    # Check daily limits
+    if not check_daily_video_limit(user_id):
+        return None, "Daily video limit reached"
+    
+    # Reset daily data if needed
+    reset_daily_data_if_needed(user)
+    
+    # Create new watch session
+    watch_session = WatchSession(
+        user_id=user_id,
+        video_id=video_id,
+        video_length=video_length,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        start_time=datetime.utcnow()
+    )
+    
+    try:
+        db.session.add(watch_session)
+        db.session.commit()
+        logging.info(f"Started watch session for user {user_id}, video {video_id}")
+        return watch_session, "Success"
+    except Exception as e:
+        logging.error(f"Failed to start watch session: {str(e)}")
+        db.session.rollback()
+        return None, "Database error"
+
+def end_watch_session(session_id, watch_duration):
+    """End a watch session and check for cheating"""
+    watch_session = WatchSession.query.get(session_id)
+    if not watch_session:
+        return False, "Session not found"
+    
+    # Update session end time and duration
+    watch_session.end_time = datetime.utcnow()
+    watch_session.watch_duration = watch_duration
+    
+    # Check for cheating
+    is_cheating, cheat_reasons = detect_cheating(watch_session)
+    
+    if is_cheating:
+        watch_session.is_suspicious = True
+        ban_user(watch_session.user_id, f"Cheating detected: {', '.join(cheat_reasons)}")
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Failed to mark session as suspicious: {str(e)}")
+            db.session.rollback()
+        
+        return False, f"Cheating detected: {', '.join(cheat_reasons)}"
+    
+    # Mark as completed and update user stats
+    watch_session.is_completed = True
+    user = User.query.get(watch_session.user_id)
+    
+    if user:
+        user.videos_watched_today += 1
+        user.total_watch_time += watch_duration
+        user.daily_online_time += watch_duration
+        
+        # Check if daily online time exceeded
+        if user.daily_online_time > MAX_DAILY_ONLINE_TIME:
+            ban_user(user.id, "Exceeded maximum daily online time")
+            try:
+                db.session.commit()
+            except Exception as e:
+                logging.error(f"Failed to update user stats: {str(e)}")
+                db.session.rollback()
+            return False, "Daily time limit exceeded"
+    
+    try:
+        db.session.commit()
+        logging.info(f"Completed watch session {session_id} for user {watch_session.user_id}")
+        return True, "Session completed successfully"
+    except Exception as e:
+        logging.error(f"Failed to complete watch session: {str(e)}")
+        db.session.rollback()
+        return False, "Database error"
+
+def get_user_stats(user_id):
+    """Get comprehensive user statistics"""
+    user = User.query.get(user_id)
+    if not user:
+        return None
+    
+    today = datetime.utcnow().date()
+    
+    # Reset daily data if needed
+    reset_daily_data_if_needed(user)
+    
+    stats = {
+        'user_id': user.id,
+        'username': user.username,
+        'videos_watched_today': user.videos_watched_today,
+        'daily_online_time': user.daily_online_time,
+        'daily_bonus_given': user.daily_bonus_given,
+        'consecutive_days': user.consecutive_days,
+        'total_watch_time': user.total_watch_time,
+        'is_banned': user.is_banned,
+        'ban_reason': user.ban_reason,
+        'videos_remaining_today': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
+        'can_watch_more': user.videos_watched_today < MAX_VIDEOS_PER_DAY and not user.is_banned
+    }
+    
+    return stats
+
+def cleanup_old_sessions():
+    """Clean up old watch sessions (run this periodically)"""
+    cutoff_date = datetime.utcnow() - timedelta(days=30)
+    
+    try:
+        old_sessions = WatchSession.query.filter(WatchSession.created_at < cutoff_date).delete()
+        db.session.commit()
+        logging.info(f"Cleaned up {old_sessions} old watch sessions")
+    except Exception as e:
+        logging.error(f"Failed to cleanup old sessions: {str(e)}")
+        db.session.rollback()
+
+def validate_session_token(user_id, token):
+    """Validate user session token"""
+    user = User.query.get(user_id)
+    if not user or user.session_token != token:
+        return False
+    return True
+
+def update_user_session(user_id, ip_address):
+    """Update user session info"""
+    user = User.query.get(user_id)
+    if user:
+        user.last_ip_address = ip_address
+        user.updated_at = datetime.utcnow()
+        
+        # Generate new session token if doesn't exist
+        if not user.session_token:
+            user.session_token = create_session_token()
+        
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Failed to update user session: {str(e)}")
+            db.session.rollback()
+    
+    return user
+
+def reset_daily_stats():
+    """Reset daily stats for all users (run this daily via cron)"""
+    try:
+        users = User.query.all()
+        for user in users:
+            user.daily_bonus_given = False
+            user.videos_watched_today = 0
+            user.daily_online_time = 0
+        db.session.commit()
+        logging.info("✅ Daily stats reset for all users")
+    except Exception as e:
+        logging.error(f"❌ Failed to reset daily stats: {str(e)}")
+        db.session.rollback()
+
+def track_focus_loss(session_id):
+    """Track when user loses focus on video"""
+    watch_session = WatchSession.query.get(session_id)
+    if watch_session:
+        watch_session.focus_lost_count += 1
+        try:
+            db.session.commit()
+            logging.info(f"Focus loss tracked for session {session_id}, count: {watch_session.focus_lost_count}")
+        except Exception as e:
+            logging.error(f"Failed to track focus loss: {str(e)}")
+            db.session.rollback()
+
+def track_back_button_press(session_id):
+    """Track when user presses back button during video"""
+    watch_session = WatchSession.query.get(session_id)
+    if watch_session:
+        watch_session.back_button_pressed = True
+        try:
+            db.session.commit()
+            logging.warning(f"Back button press detected for session {session_id}")
+        except Exception as e:
+            logging.error(f"Failed to track back button press: {str(e)}")
+            db.session.rollback()
+
+#==== Utility Functions ====
+
+def send_email(to, subject, body, html_body=None): 
+    """Send email with both text and HTML versions"""
+    if not app.config.get('MAIL_SERVER'):
+        print(f"⚠️ Email not configured - would send to {to}: {subject}")
+        return True  # Return True in development to avoid blocking
+        
+    try:
+        msg = Message(
+            subject=subject, 
+            recipients=[to], 
+            body=body, 
+            html=html_body,
+            sender=app.config['MAIL_USERNAME']
+        ) 
+        mail.send(msg)
+        print(f"✅ Email sent successfully to {to}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send email to {to}: {str(e)}")
+        return False
+
+def create_verification_email(email, verification_link):
+    """Create professional verification email content"""
+    
+    # Plain text version
+    text_body = f"""
