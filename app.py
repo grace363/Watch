@@ -257,6 +257,7 @@ class User(db.Model):
     total_watch_time = db.Column(db.Integer, default=0)
     last_ip_address = db.Column(db.String(45))
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    total_videos_watched = db.Column(db.Integer, default=0)  
     
     # Advanced Anti-Cheat Fields
     device_fingerprint = db.Column(db.String(200))  # Browser/device fingerprint
@@ -371,6 +372,34 @@ class DailySession(db.Model):
     ip_address = db.Column(db.String(45))
     
     user = db.relationship('User', backref=db.backref('daily_sessions', lazy=True))
+
+class Earning(db.Model):
+    """Track user earnings"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(50))  # 'watch', 'daily_bonus', 'referral', etc.
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)  # FIXED: This was missing
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('earnings', lazy=True))
+    video = db.relationship('Video', backref=db.backref('earnings', lazy=True))
+
+class Payout(db.Model):
+    """Track payout requests and completions"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending, completed, failed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    processed_at = db.Column(db.DateTime)
+    payment_method = db.Column(db.String(50))
+    transaction_id = db.Column(db.String(100))
+    admin_notes = db.Column(db.Text)
+    
+    user = db.relationship('User', backref=db.backref('payouts', lazy=True))
+
 
 class Withdrawal(db.Model):
     """Completed withdrawals"""
