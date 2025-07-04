@@ -11,3 +11,5 @@ itsdangerous==2.1.2
 python-dotenv==1.0.0
 psycopg2-binary
 Flask-WTF==1.1.1
+google_cloud_firestore==2.12.0
+requests_2.31.0
