@@ -316,31 +316,45 @@ class Video(db.Model):
     # Add relationship
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
 
+from datetime import datetime
+from app import db
+
 class WatchSession(db.Model):
-    __tablename__ = 'watch_sessions'  # Keep this as is
+    __tablename__ = 'watch_sessions'
     """Track individual video watch sessions for anti-cheat"""
+
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
-    session_token = db.Column(db.String(100), unique=True, nullable=False)
+    
+    # Foreign key relationships (fixed to match likely table names)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('videos.id'), nullable=False)
+
+    # Unique session token for each watch instance
+    session_token = db.Column(db.String(100), unique=True, nullable=False, index=True)
+
+    # Timing and interaction fields
     start_time = db.Column(db.DateTime, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)
     watch_duration = db.Column(db.Integer, default=0)  # seconds actually watched
     focus_lost_count = db.Column(db.Integer, default=0)  # how many times user lost focus
     back_button_pressed = db.Column(db.Boolean, default=False)
+    
+    # Cheat detection and status
     reward_given = db.Column(db.Boolean, default=False)
     cheating_detected = db.Column(db.Boolean, default=False)
     cheat_reason = db.Column(db.String(200))
+    is_completed = db.Column(db.Boolean, default=False)
+    is_suspicious = db.Column(db.Boolean, default=False)
+
+    # Device & session metadata
     ip_address = db.Column(db.String(45))
     user_agent = db.Column(db.Text)
     video_length = db.Column(db.Integer)  # total video length in seconds
-    is_completed = db.Column(db.Boolean, default=False)
-    is_suspicious = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
+    # Relationships (User & Video)
     user = db.relationship('User', backref=db.backref('watch_sessions', lazy=True))
     video = db.relationship('Video', backref=db.backref('watch_sessions', lazy=True))
-    
 
 class DailySession(db.Model):
     """Track daily online sessions for daily rewards"""
