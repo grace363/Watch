@@ -3213,7 +3213,6 @@ def claim_daily_bonus():
         return jsonify({'error': 'Server error'}), 500
 
 
-
 def heartbeat():
     try:
         user_id = session.get('user_id')
