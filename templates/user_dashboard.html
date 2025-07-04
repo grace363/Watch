@@ -174,7 +174,6 @@
         /* Main Content */
         .main-content {
             margin-left: 0;
-            padding: 24px;
             max-width: 1280px;
             margin: 0 auto;
             padding: 24px 24px;
@@ -466,7 +465,7 @@
         <div class="nav-right">
             <span class="user-email">{{ user.email }}</span>
             <div class="balance-display">
-                ${{ "%.2f"|format(user.balance_usd) }}
+                ${{ "%.2f"|format(user.balance) }}
             </div>
             <a href="/support" class="support-link">Support</a>
             {% if session.user_id and user and user.account_type == 'Admin' %}
@@ -558,7 +557,7 @@
 
         <!-- Balance Display -->
         <div class="balance-section">
-            <div class="balance-amount">${{ "%.2f"|format(user.balance_usd) }}</div>
+            <div class="balance-amount">${{ "%.2f"|format(user.balance) }}</div>
             <div class="balance-label">Your Current Balance</div>
         </div>
 
