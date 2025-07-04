@@ -10,6 +10,7 @@ import math
 import firebase_admin
 from pathlib import Path
 from sqlalchemy import func
+from itsdangerous import URLSafeTimedSerializer
 from datetime import datetime, timedelta, date
 from flask import Flask, request, session, jsonify, render_template, redirect, url_for, flash 
 from flask_sqlalchemy import SQLAlchemy 
@@ -22,8 +23,12 @@ from firebase_admin import credentials, firestore
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, JSON
+from sqlalchemy import String
 
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 #==== Flask App Config ====
 
