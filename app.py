@@ -326,8 +326,8 @@ class WatchSession(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # Foreign key relationships (fixed to match likely table names)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    video_id = db.Column(db.Integer, db.ForeignKey('videos.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey('video.id'), nullable=False)
 
     # Unique session token for each watch instance
     session_token = db.Column(db.String(100), unique=True, nullable=False, index=True)
