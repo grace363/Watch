@@ -1542,7 +1542,6 @@ def utility_processor():
     )
 
 @app.route('/heartbeat', methods=['POST'])
-@app.route('/api/heartbeat', methods=['POST'])
 def heartbeat():
     """Keep track of user activity and session with enhanced anti-cheat"""
     if 'user_id' not in session:
