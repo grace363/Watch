@@ -1,559 +1,822 @@
-import React, { useState, useEffect } from 'react';
-import { User, Play, Gift, Home, TrendingUp, Settings, LogOut, Menu, X, Video, Clock, DollarSign, Eye, AlertCircle } from 'lucide-react';
-
-const UserDashboard = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  const [videos, setVideos] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [onlineTime, setOnlineTime] = useState(0);
-  const [isClaimingBonus, setIsClaimingBonus] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [sessionToken, setSessionToken] = useState(null);
-  const [behavioralData, setBehavioralData] = useState({
-    mouse_movements: 0,
-    click_count: 0,
-    keyboard_events: 0,
-    focus_changes: 0,
-    page_visibility_changes: 0
-  });
-  
-  const MAX_VIDEOS_PER_DAY = 50;
-  const DAILY_ONLINE_TIME = 3600; // 1 hour in seconds
-  const DAILY_REWARD = 0.50;
-
-  // Initialize component
-  useEffect(() => {
-    initializeDashboard();
-    startBehavioralTracking();
-    generateSessionToken();
-  }, []);
-
-  const generateSessionToken = () => {
-    const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    setSessionToken(token);
-  };
-
-  const initializeDashboard = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([
-        fetchUserData(),
-        fetchVideos()
-      ]);
-    } catch (error) {
-      showAlert('error', 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUserData = async () => {
-    try {
-      const response = await fetch('/api/user/profile', {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Watch & Earn</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch user data');
-      }
-
-      const userData = await response.json();
-      setUser(userData);
-      setOnlineTime(userData.daily_online_time || 0);
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      showAlert('error', 'Failed to load user data');
-    }
-  };
-
-  const fetchVideos = async () => {
-    try {
-      const response = await fetch('/api/videos/available', {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f9f9f9;
+            color: #030303;
+            line-height: 1.4;
         }
-      });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch videos');
-      }
+        /* Top Navigation Bar - Minimal like YouTube */
+        .top-nav {
+            background: #fff;
+            border-bottom: 1px solid #e5e5e5;
+            padding: 0 16px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
 
-      const videosData = await response.json();
-      setVideos(videosData.videos || []);
-    } catch (error) {
-      console.error('Error fetching videos:', error);
-      showAlert('error', 'Failed to load videos');
-    }
-  };
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
 
-  // Behavioral tracking
-  const startBehavioralTracking = () => {
-    // Track mouse movements
-    const handleMouseMove = () => {
-      setBehavioralData(prev => ({
-        ...prev,
-        mouse_movements: prev.mouse_movements + 1
-      }));
-    };
+        .menu-btn {
+            background: none;
+            border: none;
+            padding: 8px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: #030303;
+            transition: background-color 0.1s;
+        }
 
-    // Track clicks
-    const handleClick = () => {
-      setBehavioralData(prev => ({
-        ...prev,
-        click_count: prev.click_count + 1
-      }));
-    };
+        .menu-btn:hover {
+            background-color: #f2f2f2;
+        }
 
-    // Track keyboard events
-    const handleKeyPress = () => {
-      setBehavioralData(prev => ({
-        ...prev,
-        keyboard_events: prev.keyboard_events + 1
-      }));
-    };
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 20px;
+            font-weight: 500;
+            color: #ff0000;
+            text-decoration: none;
+        }
 
-    // Track focus changes
-    const handleFocusChange = () => {
-      setBehavioralData(prev => ({
-        ...prev,
-        focus_changes: prev.focus_changes + 1
-      }));
-    };
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+        }
 
-    // Track page visibility changes
-    const handleVisibilityChange = () => {
-      setBehavioralData(prev => ({
-        ...prev,
-        page_visibility_changes: prev.page_visibility_changes + 1
-      }));
-    };
+        .user-email {
+            color: #606060;
+        }
 
-    // Add event listeners
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keypress', handleKeyPress);
-    window.addEventListener('focus', handleFocusChange);
-    window.addEventListener('blur', handleFocusChange);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+        .balance-display {
+            background: #00a152;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 18px;
+            font-weight: 500;
+            font-size: 13px;
+        }
 
-    // Cleanup function
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keypress', handleKeyPress);
-      window.removeEventListener('focus', handleFocusChange);
-      window.removeEventListener('blur', handleFocusChange);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  };
+        .support-link {
+            color: #065fd4;
+            text-decoration: none;
+            font-weight: 500;
+        }
 
-  // Heartbeat for daily session tracking
-  useEffect(() => {
-    const heartbeat = setInterval(() => {
-      sendHeartbeat();
-    }, 5000);
+        .support-link:hover {
+            text-decoration: underline;
+        }
 
-    return () => clearInterval(heartbeat);
-  }, [sessionToken, behavioralData]);
+        /* Sidebar Menu */
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            left: -280px;
+            width: 280px;
+            height: calc(100vh - 56px);
+            background: #fff;
+            border-right: 1px solid #e5e5e5;
+            transition: left 0.3s ease;
+            z-index: 999;
+            overflow-y: auto;
+        }
 
-  const sendHeartbeat = async () => {
-    if (!sessionToken) return;
+        .sidebar.open {
+            left: 0;
+        }
 
-    try {
-      const response = await fetch('/api/heartbeat', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_token: sessionToken,
-          type: 'daily',
-          focus_lost: behavioralData.focus_changes,
-          back_button: false,
-          behavioral_data: behavioralData,
-          mouse_data: {
-            movements: behavioralData.mouse_movements,
-            clicks: behavioralData.click_count
-          },
-          screen_data: {
-            width: window.screen.width,
-            height: window.screen.height,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
-        })
-      });
+        .sidebar-section {
+            border-bottom: 1px solid #e5e5e5;
+            padding: 12px 0;
+        }
 
-      if (response.ok) {
-        const data = await response.json();
-        setOnlineTime(data.online_time || 0);
-      }
-    } catch (error) {
-      console.error('Heartbeat error:', error);
-    }
-  };
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 24px;
+            color: #030303;
+            text-decoration: none;
+            transition: background-color 0.1s;
+            font-size: 14px;
+        }
 
-  const showAlert = (type, message) => {
-    const alert = { id: Date.now(), type, message };
-    setAlerts(prev => [...prev, alert]);
-    setTimeout(() => {
-      setAlerts(prev => prev.filter(a => a.id !== alert.id));
-    }, 5000);
-  };
+        .sidebar-item:hover {
+            background-color: #f2f2f2;
+        }
 
-  const claimDailyBonus = async () => {
-    if (!user) return;
+        .sidebar-item i {
+            width: 24px;
+            margin-right: 24px;
+            font-size: 16px;
+        }
 
-    if (onlineTime < DAILY_ONLINE_TIME) {
-      showAlert('error', `You need ${DAILY_ONLINE_TIME - onlineTime} more seconds online to claim your bonus!`);
-      return;
-    }
+        .sidebar-stats {
+            padding: 16px 24px;
+        }
 
-    setIsClaimingBonus(true);
-    
-    try {
-      const response = await fetch('/api/claim_daily_bonus', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          behavioral_data: behavioralData,
-          device_data: {
-            screen_width: window.screen.width,
-            screen_height: window.screen.height,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            user_agent: navigator.userAgent,
-            language: navigator.language
-          }
-        })
-      });
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
 
-      const data = await response.json();
+        .stat-label {
+            color: #606060;
+        }
 
-      if (response.ok) {
-        // Update user state with new data
-        setUser(prev => ({
-          ...prev,
-          balance_usd: data.new_balance,
-          daily_bonus_given: true,
-          consecutive_days: data.consecutive_days,
-          daily_online_time: 0
-        }));
-        
-        setOnlineTime(0);
-        
-        showAlert('success', 
-          `Daily bonus claimed! You earned $${data.bonus_amount.toFixed(2)} (Day ${data.consecutive_days})`
-        );
-      } else {
-        showAlert('error', data.error || 'Failed to claim bonus');
-      }
-    } catch (error) {
-      console.error('Error claiming bonus:', error);
-      showAlert('error', 'Failed to claim bonus. Please try again.');
-    } finally {
-      setIsClaimingBonus(false);
-    }
-  };
+        .stat-value {
+            font-weight: 500;
+        }
 
-  const watchVideo = async (videoId) => {
-    if (!user) return;
+        /* Overlay for mobile */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 998;
+        }
 
-    try {
-      const response = await fetch('/api/watch_video', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          video_id: videoId,
-          session_token: sessionToken
-        })
-      });
+        .overlay.show {
+            display: block;
+        }
 
-      const data = await response.json();
+        /* Main Content */
+        .main-content {
+            margin-left: 0;
+            padding: 24px;
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 24px 24px;
+        }
 
-      if (response.ok) {
-        showAlert('success', `Video session started! Watch for at least ${data.min_watch_time}s to earn $${data.reward_amount.toFixed(3)}`);
-        // You could redirect to video player here
-        // window.location.href = `/watch/${videoId}`;
-      } else {
-        showAlert('error', data.error || 'Failed to start video session');
-      }
-    } catch (error) {
-      console.error('Error starting video:', error);
-      showAlert('error', 'Failed to start video. Please try again.');
-    }
-  };
+        /* Video Grid - YouTube Style */
+        .videos-section {
+            margin-bottom: 40px;
+        }
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
 
-  const progressPercent = Math.min((onlineTime / DAILY_ONLINE_TIME) * 100, 100);
-  const can_watch_more = user ? user.videos_watched_today < MAX_VIDEOS_PER_DAY : false;
+        .section-title {
+            font-size: 20px;
+            font-weight: 500;
+            color: #030303;
+        }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+        .videos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle size={64} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-medium text-gray-900 mb-2">Unable to Load Dashboard</h2>
-          <p className="text-gray-600 mb-4">Please try refreshing the page or contact support.</p>
-          <button 
-            onClick={initializeDashboard}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+        .video-card {
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation */}
-      <nav className="bg-white border-b border-gray-200 h-14 flex items-center justify-between px-4 sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <Menu size={20} />
-          </button>
-          <div className="flex items-center gap-2 text-red-600 font-medium text-lg">
-            <Play size={20} />
-            Watch & Earn
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3 text-sm">
-          <span className="text-gray-600 hidden sm:block">{user.email}</span>
-          <div className="bg-green-600 text-white px-3 py-1 rounded-full font-medium">
-            ${user.balance_usd.toFixed(2)}
-          </div>
-          <a href="/support" className="text-blue-600 hover:underline font-medium">
-            Support
-          </a>
-        </div>
-      </nav>
+        .video-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
 
-      {/* Sidebar */}
-      <div className={`fixed top-14 left-0 w-72 h-full bg-white border-r border-gray-200 transform transition-transform duration-300 z-40 overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        {/* Stats Section */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Videos Today</span>
-              <span className="font-medium">{user.videos_watched_today}/{MAX_VIDEOS_PER_DAY}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Total Minutes</span>
-              <span className="font-medium">{user.total_watch_minutes}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Daily Bonus</span>
-              <span className="font-medium">{user.daily_bonus_given ? '✓ Claimed' : 'Available'}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Account Type</span>
-              <span className="font-medium">{user.account_type}</span>
-            </div>
-          </div>
-        </div>
+        .video-thumbnail {
+            width: 100%;
+            height: 180px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+            position: relative;
+        }
 
-        {/* Navigation Links */}
-        <div className="py-2">
-          <div className="border-b border-gray-200 pb-2">
-            <a href="/" className="flex items-center gap-6 px-6 py-3 text-sm hover:bg-gray-50 transition-colors">
-              <Home size={16} />
-              Home
-            </a>
-            <a href="/dashboard" className="flex items-center gap-6 px-6 py-3 text-sm hover:bg-gray-50 transition-colors">
-              <TrendingUp size={16} />
-              Dashboard
-            </a>
-          </div>
-          
-          <div className="border-b border-gray-200 py-2">
-            <a href="/earnings" className="flex items-center gap-6 px-6 py-3 text-sm hover:bg-gray-50 transition-colors">
-              <DollarSign size={16} />
-              Earnings History
-            </a>
-            <a href="/profile" className="flex items-center gap-6 px-6 py-3 text-sm hover:bg-gray-50 transition-colors">
-              <User size={16} />
-              Profile Settings
-            </a>
-            <a href="/support" className="flex items-center gap-6 px-6 py-3 text-sm hover:bg-gray-50 transition-colors">
-              <Settings size={16} />
-              Support & Templates
-            </a>
-          </div>
-          
-          <div className="py-2">
-            <a href="/logout" className="flex items-center gap-6 px-6 py-3 text-sm hover:bg-gray-50 transition-colors">
-              <LogOut size={16} />
-              Logout
-            </a>
-          </div>
-        </div>
-      </div>
+        .video-duration {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-size: 12px;
+            font-weight: 500;
+        }
 
-      {/* Overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+        .video-info {
+            padding: 16px;
+        }
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto p-6">
-        {/* Flash Messages */}
-        {alerts.map(alert => (
-          <div key={alert.id} className={`mb-4 p-4 rounded-lg border-l-4 ${
-            alert.type === 'error' ? 'bg-red-50 border-red-500 text-red-700' :
-            alert.type === 'success' ? 'bg-green-50 border-green-500 text-green-700' :
-            'bg-yellow-50 border-yellow-500 text-yellow-700'
-          }`}>
-            {alert.message}
-          </div>
-        ))}
+        .video-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #030303;
+            margin-bottom: 8px;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
 
-        {/* Balance Display */}
-        <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-6 rounded-xl mb-6 text-center">
-          <div className="text-3xl font-bold mb-2">${user.balance_usd.toFixed(2)}</div>
-          <div className="text-green-100">Your Current Balance</div>
-        </div>
+        .video-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #606060;
+        }
 
-        {/* Daily Bonus Section */}
-        {!user.daily_bonus_given && (
-          <div className="bg-gradient-to-r from-pink-500 to-teal-400 text-white p-6 rounded-xl mb-6 text-center">
-            <h3 className="text-xl font-semibold mb-2">
-              <Gift className="inline mr-2" size={20} />
-              Daily Bonus Available!
-            </h3>
-            <p className="mb-4">Stay online and watch videos to earn your daily bonus</p>
-            
-            <div className="text-lg font-semibold mb-4">
-              Time online: {formatTime(onlineTime)} / {formatTime(DAILY_ONLINE_TIME)}
-            </div>
-            
-            <div className="bg-white bg-opacity-30 rounded-full h-2 mb-4 overflow-hidden">
-              <div 
-                className="bg-white h-full rounded-full transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            
-            <button
-              onClick={claimDailyBonus}
-              disabled={onlineTime < DAILY_ONLINE_TIME || isClaimingBonus}
-              className="bg-white bg-opacity-20 border-2 border-white text-white px-6 py-3 rounded-full font-semibold hover:bg-white hover:text-pink-500 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isClaimingBonus ? (
-                'Claiming...'
-              ) : (
-                <>
-                  <Gift className="inline mr-2" size={16} />
-                  Claim ${DAILY_REWARD.toFixed(2)} Bonus
-                </>
-              )}
+        .video-reward {
+            background: #00a152;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .watch-btn {
+            width: 100%;
+            background: #ff0000;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+        }
+
+        .watch-btn:hover:not(:disabled) {
+            background: #cc0000;
+        }
+
+        .watch-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Balance Display */
+        .balance-section {
+            background: linear-gradient(135deg, #00a152, #00d862);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .balance-amount {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .balance-label {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        /* Daily Bonus */
+        .bonus-section {
+            background: linear-gradient(135deg, #ff6b6b, #4ecdc4);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .bonus-timer {
+            font-size: 20px;
+            font-weight: 600;
+            margin: 16px 0;
+        }
+
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.3);
+            height: 8px;
+            border-radius: 4px;
+            margin: 16px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: white;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .claim-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .claim-btn:hover:not(:disabled) {
+            background: white;
+            color: #ff6b6b;
+        }
+
+        .claim-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* No videos state */
+        .no-videos {
+            text-align: center;
+            padding: 60px 20px;
+            color: #606060;
+        }
+
+        .no-videos i {
+            font-size: 64px;
+            margin-bottom: 16px;
+            color: #e0e0e0;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            border-left: 4px solid;
+        }
+
+        .alert-success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border-color: #4caf50;
+        }
+
+        .alert-error {
+            background: #ffeaea;
+            color: #c62828;
+            border-color: #f44336;
+        }
+
+        .alert-warning {
+            background: #fff8e1;
+            color: #ef6c00;
+            border-color: #ff9800;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .videos-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .main-content {
+                padding: 16px;
+            }
+
+            .nav-right {
+                gap: 8px;
+            }
+
+            .user-email {
+                display: none;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .video-info {
+                padding: 12px;
+            }
+
+            .balance-amount {
+                font-size: 24px;
+            }
+
+            .bonus-section, .balance-section {
+                padding: 16px;
+            }
+        }
+
+        /* CSRF Token hidden input */
+        input[name="csrf_token"] {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Navigation -->
+    <nav class="top-nav">
+        <div class="nav-left">
+            <button class="menu-btn" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
             </button>
-          </div>
-        )}
-
-        {/* Videos Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-xl font-medium">Available Videos</h2>
-            {!can_watch_more && (
-              <span className="text-red-600 text-sm">Daily limit reached</span>
-            )}
-          </div>
-          
-          {videos.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {videos.map(video => (
-                <div key={video.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-1">
-                  <div className="h-44 bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white relative">
-                    <Play size={48} />
-                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-80 text-white px-2 py-1 rounded text-xs font-medium">
-                      {video.min_watch_time}s
-                    </div>
-                  </div>
-                  
-                  <div className="p-4">
-                    <h3 className="font-medium text-gray-900 mb-3 line-clamp-2 leading-tight">
-                      {video.title}
-                    </h3>
-                    
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                      <span className="flex items-center gap-1">
-                        <User size={14} />
-                        User {video.added_by}
-                      </span>
-                      <span className="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">
-                        ${video.reward_amount.toFixed(3)}
-                      </span>
-                    </div>
-                    
-                    {can_watch_more ? (
-                      <button
-                        onClick={() => watchVideo(video.id)}
-                        className="w-full bg-red-600 text-white py-2.5 rounded-lg font-medium hover:bg-red-700 transition-colors"
-                      >
-                        <Play className="inline mr-2" size={16} />
-                        Watch & Earn
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="w-full bg-gray-400 text-white py-2.5 rounded-lg font-medium cursor-not-allowed"
-                      >
-                        <AlertCircle className="inline mr-2" size={16} />
-                        Daily Limit Reached
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16 text-gray-500">
-              <Video size={64} className="mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium mb-2">No videos available</h3>
-              <p>Check back later for new earning opportunities!</p>
-            </div>
-          )}
+            <a href="/" class="logo">
+                <i class="fas fa-play"></i>
+                Watch & Earn
+            </a>
         </div>
-      </main>
-    </div>
-  );
-};
+        <div class="nav-right">
+            <span class="user-email">{{ user.email }}</span>
+            <div class="balance-display">
+                ${{ "%.2f"|format(user.balance_usd) }}
+            </div>
+            <a href="/support" class="support-link">Support</a>
+            {% if session.user_id and user and user.account_type == 'Admin' %}
+            <a href="/admin_panel" class="support-link" style="color: #ff6b35; font-weight: 600;">
+                <i class="fas fa-cog"></i> Admin Panel
+            </a>
+            {% endif %}
+        </div>
+    </nav>
 
-export default UserDashboard;
+    <!-- Sidebar Menu -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-section">
+            <div class="sidebar-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Videos Today</span>
+                    <span class="stat-value">{{ user.videos_watched_today }}/{{ MAX_VIDEOS_PER_DAY or 50 }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Minutes</span>
+                    <span class="stat-value">{{ user.total_watch_minutes }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Daily Bonus</span>
+                    <span class="stat-value">{% if user.daily_bonus_given %}✓ Claimed{% else %}Available{% endif %}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Account Type</span>
+                    <span class="stat-value">{{ user.account_type or 'Viewer' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-section">
+            <a href="/" class="sidebar-item">
+                <i class="fas fa-home"></i>
+                Home
+            </a>
+            <a href="/dashboard" class="sidebar-item">
+                <i class="fas fa-tachometer-alt"></i>
+                Dashboard
+            </a>
+            {% if session.user_id and user and user.account_type == 'YouTuber' %}
+            <a href="{{ url_for('youtuber_dashboard') }}" class="sidebar-item">
+                <i class="fab fa-youtube"></i>
+                YouTuber Dashboard
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="sidebar-section">
+            <a href="/earnings" class="sidebar-item">
+                <i class="fas fa-chart-line"></i>
+                Earnings History
+            </a>
+            <a href="/profile" class="sidebar-item">
+                <i class="fas fa-user"></i>
+                Profile Settings
+            </a>
+            <a href="/support" class="sidebar-item">
+                <i class="fas fa-headset"></i>
+                Support & Templates
+            </a>
+        </div>
+
+        <div class="sidebar-section">
+            <a href="{{ url_for('logout') }}" class="sidebar-item">
+                <i class="fas fa-sign-out-alt"></i>
+                Logout
+            </a>
+        </div>
+    </div>
+
+    <!-- Overlay for mobile -->
+    <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else 'success' if category == 'success' else 'warning' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Balance Display -->
+        <div class="balance-section">
+            <div class="balance-amount">${{ "%.2f"|format(user.balance_usd) }}</div>
+            <div class="balance-label">Your Current Balance</div>
+        </div>
+
+        <!-- Daily Bonus Section -->
+        {% if not user.daily_bonus_given %}
+        <div class="bonus-section">
+            <h3><i class="fas fa-gift"></i> Daily Bonus Available!</h3>
+            <p>Stay online and watch videos to earn your daily bonus</p>
+            <div class="bonus-timer" id="onlineTimer">
+                Time online: <span id="timeDisplay">{{ user.daily_online_time or 0 }}s</span> / {{ DAILY_ONLINE_TIME or 60 }}s
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="timeProgress" style="width: {{ ((user.daily_online_time or 0) / (DAILY_ONLINE_TIME or 60) * 100)|round(2) }}%"></div>
+            </div>
+            <button class="claim-btn" id="claimBonusBtn" onclick="claimDailyBonus()"
+                    {% if (user.daily_online_time or 0) < (DAILY_ONLINE_TIME or 60) %}disabled{% endif %}>
+                <i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus
+            </button>
+        </div>
+        {% endif %}
+
+        <!-- Videos Section -->
+        <div class="videos-section">
+            <div class="section-header">
+                <h2 class="section-title">Available Videos</h2>
+                {% if not can_watch_more %}
+                    <span style="color: #ff0000; font-size: 14px;">Daily limit reached</span>
+                {% endif %}
+            </div>
+            
+            {% if videos %}
+                <div class="videos-grid">
+                    {% for video in videos %}
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <i class="fas fa-play"></i>
+                            <div class="video-duration">{{ video.min_watch_time or 30 }}s</div>
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">{{ video.title }}</h3>
+                            <div class="video-meta">
+                                <span><i class="fas fa-user"></i> User {{ video.added_by }}</span>
+                                <span class="video-reward">${{ "%.3f"|format(video.reward_amount or 0.01) }}</span>
+                            </div>
+                            {% if can_watch_more %}
+                                <a href="{{ url_for('watch_video', video_id=video.id) }}" class="watch-btn">
+                                    <i class="fas fa-play"></i> Watch & Earn
+                                </a>
+                            {% else %}
+                                <button class="watch-btn" disabled>
+                                    <i class="fas fa-ban"></i> Daily Limit Reached
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="no-videos">
+                    <i class="fas fa-video"></i>
+                    <h3>No videos available</h3>
+                    <p>Check back later for new earning opportunities!</p>
+                </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <!-- CSRF Token for AJAX requests -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <script>
+        // Sidebar functionality
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('show');
+        }
+
+        function closeSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('overlay');
+            
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        }
+
+        // Close sidebar when clicking outside on desktop
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuBtn = document.querySelector('.menu-btn');
+            
+            if (!sidebar.contains(event.target) && !menuBtn.contains(event.target)) {
+                closeSidebar();
+            }
+        });
+
+        // Session heartbeat and timer management
+        let onlineStartTime = Date.now();
+        let currentOnlineTime = {{ user.daily_online_time or 0 }};
+        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }}; // Ensures default 60 seconds
+        const sessionHeartbeatInterval = {{ SESSION_HEARTBEAT_INTERVAL or 5 }} * 1000;
+        
+        let focusLostCount = 0;
+        let windowFocused = true;
+
+        // Track window focus for anti-cheat
+        window.addEventListener('focus', function() {
+            windowFocused = true;
+        });
+
+        window.addEventListener('blur', function() {
+            windowFocused = false;
+            focusLostCount++;
+        });
+
+        // Prevent back button (basic deterrent)
+        window.addEventListener('beforeunload', function(e) {
+            // Only warn if user is in middle of watching
+            if (window.location.pathname.includes('/watch_video/')) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+        // Update online timer display
+        function updateTimer() {
+            // Only increment if window is focused AND we haven't reached the required time yet
+            if (windowFocused && currentOnlineTime < requiredTime) {
+                currentOnlineTime++;
+                document.getElementById('timeDisplay').textContent = currentOnlineTime + 's';
+                
+                const progress = Math.min((currentOnlineTime / requiredTime) * 100, 100);
+                document.getElementById('timeProgress').style.width = progress + '%';
+                
+                // Enable claim button when time requirement is met
+                const claimBtn = document.getElementById('claimBonusBtn');
+                if (claimBtn && currentOnlineTime >= requiredTime) {
+                    claimBtn.disabled = false;
+                }
+            }
+            // If we've reached the required time, ensure display shows the max time
+            else if (currentOnlineTime >= requiredTime) {
+                document.getElementById('timeDisplay').textContent = requiredTime + 's';
+                document.getElementById('timeProgress').style.width = '100%';
+            }
+        }
+
+        // FIXED: Function to claim daily bonus - Uses correct endpoint
+        function claimDailyBonus() {
+            const claimBtn = document.getElementById('claimBonusBtn');
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            
+            if (claimBtn.disabled && currentOnlineTime < requiredTime) {
+                alert('You need to stay online for the required time first!');
+                return;
+            }
+            
+            // Disable button to prevent double clicks
+            claimBtn.disabled = true;
+            claimBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+            
+            // FIXED: Use the correct endpoint that properly handles daily bonus logic
+            fetch('/api/claim_daily_bonus', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Success - show new balance and reload page
+                    alert(`Daily bonus of $${data.bonus.toFixed(2)} claimed successfully! New balance: $${data.new_balance.toFixed(2)}`);
+                    
+                    // Update balance displays immediately
+                    document.querySelector('.balance-display').textContent = '$' + data.new_balance.toFixed(2);
+                    document.querySelector('.balance-amount').textContent = '$' + data.new_balance.toFixed(2);
+                    
+                    // Remove bonus section after successful claim
+                    document.querySelector('.bonus-section').style.display = 'none';
+                    
+                    // Optional: Reload page to reflect all changes
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    
+                } else if (data.error) {
+                    // Handle specific error cases
+                    if (data.error.includes('already claimed')) {
+                        alert('You have already claimed your daily bonus today. Come back tomorrow!');
+                        window.location.reload();
+                    } else if (data.error.includes('Need to stay online')) {
+                        alert(`Please stay online longer. Required: ${data.required}s, Current: ${data.current}s`);
+                        claimBtn.disabled = false;
+                        claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                    } else {
+                        alert('Error: ' + data.error);
+                        claimBtn.disabled = false;
+                        claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error claiming daily bonus:', error);
+                alert('There was an error claiming your daily bonus. Please try again.');
+                claimBtn.disabled = false;
+                claimBtn.innerHTML = '<i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus';
+            });
+        }
+
+        // Send heartbeat to server every few seconds
+        function sendHeartbeat() {
+            if (windowFocused) {
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                
+                fetch('/heartbeat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        online_time: currentOnlineTime,
+                        focus_lost_count: focusLostCount,
+                        page: 'dashboard'
+                    }),
+                    credentials: 'same-origin'
+                })
+                .catch(error => console.error('Heartbeat error:', error));
+            }
+        }
+
+        // Start timers
+        setInterval(updateTimer, 1000); // Update every second
+        setInterval(sendHeartbeat, sessionHeartbeatInterval); // Send heartbeat every 5 seconds
+
+        // Initial heartbeat
+        sendHeartbeat();
+
+        // Auto-refresh balance every 30 seconds
+        setInterval(function() {
+            fetch('/api/balance', {
+                method: 'GET',
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.balance !== undefined) {
+                    document.querySelector('.balance-display').textContent = '$' + data.balance.toFixed(2);
+                    document.querySelector('.balance-amount').textContent = '$' + data.balance.toFixed(2);
+                }
+            })
+            .catch(error => console.error('Balance update error:', error));
+        }, 30000);
+    </script>
+</body>
+</html>
