@@ -19,6 +19,7 @@ from pathlib import Path
 import logging 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, JSON
 import math
+from sqlalchemy import func
 
 
 #==== Flask App Config ====
@@ -226,7 +227,9 @@ class User(db.Model):
     phone = db.Column(db.String(20))
     last_bonus_date = db.Column(db.Date)
     daily_online_time = db.Column(db.Integer, default=0)  # seconds online today
-        
+    total_watched_time = db.Column(db.Integer, default=0)
+    last_watch_time = db.Column(db.Integer, default = 0)
+    
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
     last_video_date = db.Column(db.Date)
