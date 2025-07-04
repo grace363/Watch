@@ -24,7 +24,6 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, JSON
 from sqlalchemy import String
 from datetime import datetime
-from app import db
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
