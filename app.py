@@ -1519,6 +1519,51 @@ def terms():
 
 #==== Run App ====
 
+
+@app.route('/api/user_stats')
+def user_stats():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user = db.session.get(User, session['user_id'])
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    stats = {
+        'total_earnings': user.balance_usd,
+        'bonuses_claimed': user.bonuses_claimed if hasattr(user, 'bonuses_claimed') else 'N/A',
+        'referrals': user.referral_count if hasattr(user, 'referral_count') else 'N/A'
+    }
+
+    return jsonify(stats)
+
+
+
+@app.route('/earnings')
+def earnings_page():
+    return render_template('earnings.html')
+
+
+
+@app.route('/api/earnings')
+def api_earnings():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session['user_id']
+    earnings = Earnings.query.filter_by(user_id=user_id).order_by(Earnings.timestamp.desc()).all()
+
+    earnings_list = []
+    for earning in earnings:
+        earnings_list.append({
+            'type': earning.type,
+            'amount': earning.amount,
+            'timestamp': earning.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    return jsonify({'earnings': earnings_list})
+
+
 if __name__ == '__main__':
     # Initialize database on startup
     init_db()
