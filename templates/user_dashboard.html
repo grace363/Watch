@@ -632,6 +632,13 @@
                 if (data.success) {
                     msg.textContent = `✅ Claimed $${data.bonus} successfully! New balance: $${data.new_balance.toFixed(2)}`;
                     btn.style.display = "none";
+                    const balanceDisplay = document.getElementById("userBalance");
+                    if (balanceDisplay) {
+                        
+    const currentBalance = parseFloat(balanceDisplay.textContent.replace('$', '')) || 0;
+    animateBalanceUpdate(balanceDisplay, currentBalance, data.new_balance, 1000);
+    
+                    }
                 } else if (data.error) {
                     msg.textContent = `❌ ${data.error}`;
                     btn.disabled = false;
@@ -643,6 +650,24 @@
             });
         });
     </script>
+
+<script>
+function animateBalanceUpdate(el, start, end, duration) {
+    let startTime = null;
+    function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = timestamp - startTime;
+        const percent = Math.min(progress / duration, 1);
+        const current = start + (end - start) * percent;
+        el.textContent = `$${current.toFixed(2)}`;
+        if (percent < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
+    requestAnimationFrame(animate);
+}
+</script>
+
 </body>
 
 </html>
