@@ -1504,24 +1504,6 @@ def get_youtube_embed_url(youtube_url):
 
 # Security helper function
 # Security helper function
-def check_daily_video_limit(user_id):
-    """Check if user has exceeded daily video watch limit"""
-    from datetime import datetime, timedelta
-    
-    today = datetime.utcnow().date()
-    start_of_day = datetime.combine(today, datetime.min.time())
-    
-    # Count videos watched today
-    videos_watched_today = WatchSession.query.filter(
-        WatchSession.user_id == user_id,
-        WatchSession.start_time >= start_of_day,
-        WatchSession.reward_given == True
-    ).count()
-    
-    return videos_watched_today < DAILY_VIDEO_LIMIT
-
-# Make helper functions available in templates
-@app.context_processor
 def utility_processor():
     return dict(
         get_youtube_embed_url=get_youtube_embed_url,
@@ -1534,122 +1516,6 @@ def utility_processor():
     )
 
 @app.route('/api/heartbeat', methods=['POST'])
-def heartbeat():
-    """Keep track of user activity and session with enhanced anti-cheat"""
-    if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    
-    try:
-        data = request.get_json()
-        session_token = data.get('session_token')
-        session_type = data.get('type', 'video')  # 'video' or 'daily'
-        focus_lost = data.get('focus_lost', 0)
-        back_button = data.get('back_button', False)
-        
-        # Get additional anti-cheat data
-        mouse_data = data.get('mouse_data', {})
-        keyboard_data = data.get('keyboard_data', {})
-        screen_data = data.get('screen_data', {})
-        behavioral_data = data.get('behavioral_data', {})
-        
-        user_id = session['user_id']
-        user_ip = request.remote_addr
-        user_agent = request.headers.get('User-Agent', '')
-        
-        # Update device fingerprint if changed
-        update_device_fingerprint(user_id, screen_data, user_agent)
-        
-        # Check for proxy/VPN
-        is_proxy = detect_proxy_vpn(user_ip)
-        if is_proxy:
-            log_security_event(user_id, 'proxy_detected', 'medium', 
-                             f'Proxy/VPN detected from IP: {user_ip}')
-        
-        if session_type == 'video' and session_token:
-            watch_session = WatchSession.query.filter_by(session_token=session_token).first()
-            if watch_session and watch_session.user_id == user_id:
-                # Update basic session data
-                watch_session.focus_lost_count = focus_lost
-                watch_session.back_button_pressed = back_button
-                watch_session.watch_duration = data.get('watch_duration', 0)
-                watch_session.user_agent = user_agent
-                watch_session.ip_address = user_ip
-                
-                # Store mouse movement data for bot detection
-                if mouse_data:
-                    store_mouse_movements(watch_session.id, mouse_data)
-                
-                # Store keystroke patterns
-                if keyboard_data:
-                    store_keystroke_patterns(user_id, session_token, keyboard_data)
-                
-                # Advanced cheat detection
-                cheat_detected, cheat_reasons = advanced_cheat_detection(
-                    watch_session, mouse_data, behavioral_data, is_proxy
-                )
-                
-                if cheat_detected:
-                    watch_session.cheating_detected = True
-                    watch_session.cheat_reason = '; '.join(cheat_reasons)
-                    watch_session.is_suspicious = True
-                    
-                    # Log security event
-                    log_security_event(user_id, 'cheating_detected', 'high', 
-                                     f'Cheating detected: {"; ".join(cheat_reasons)}')
-                    
-                    # Update user risk score
-                    update_user_risk_score(user_id, cheat_reasons)
-                
-                # Calculate and store risk score
-                risk_score = calculate_session_risk_score(watch_session, mouse_data, behavioral_data)
-                store_risk_score(user_id, watch_session.id, risk_score)
-                
-                db.session.commit()
-                return jsonify({
-                    'success': True, 
-                    'cheating': watch_session.cheating_detected,
-                    'risk_level': risk_score.get('risk_level', 'low'),
-                    'suspicious': watch_session.is_suspicious
-                })
-        
-        elif session_type == 'daily':
-            # Update daily session with enhanced tracking
-            user = User.query.get(user_id)
-            user.last_heartbeat = datetime.utcnow()
-            user.last_ip_address = user_ip
-            
-            # Update geolocation data
-            update_user_geolocation(user_id, user_ip)
-            
-            # Calculate online time
-            if user.session_start_time:
-                online_time = (datetime.utcnow() - user.session_start_time).total_seconds()
-                user.daily_online_time = min(int(online_time), DAILY_ONLINE_TIME)
-            
-            # Update behavioral scores
-            update_behavioral_scores(user, behavioral_data)
-            
-            # Check for automation/bot behavior
-            if detect_automation(behavioral_data, mouse_data):
-                user.automation_detected = True
-                log_security_event(user_id, 'automation_detected', 'high', 
-                                 'Bot-like behavior detected during daily session')
-            
-            db.session.commit()
-            return jsonify({
-                'success': True, 
-                'online_time': user.daily_online_time,
-                'required_time': DAILY_ONLINE_TIME,
-                'risk_level': user.risk_level,
-                'automation_detected': user.automation_detected
-            })
-            
-        return jsonify({'error': 'Invalid session'}), 400
-        
-    except Exception as e:
-        print(f"❌ Heartbeat error: {str(e)}")
-        return jsonify({'error': 'Heartbeat failed'}), 500
-
 @app.route('/api/complete_video', methods=['POST'])
 def complete_video():
     """Complete video watch with advanced fraud detection"""
@@ -1742,7 +1608,7 @@ def complete_video():
         risk_multiplier = get_risk_reward_multiplier(final_risk['risk_level'])
         final_reward = base_reward * risk_multiplier
         
-        user.balance_usd += final_reward
+        user.balance += final_reward
         user.videos_watched_today += 1
         user.total_watch_minutes += int(watch_duration // 60)
         user.total_watch_time += int(watch_duration)
@@ -1771,7 +1637,7 @@ def complete_video():
             'reward': final_reward,
             'base_reward': base_reward,
             'risk_multiplier': risk_multiplier,
-            'new_balance': user.balance_usd,
+            'new_balance': user.balance,
             'videos_remaining': MAX_VIDEOS_PER_DAY - user.videos_watched_today,
             'risk_level': final_risk['risk_level'],
             'behavioral_score': user.behavioral_score
@@ -1838,7 +1704,7 @@ def get_balance():
         
         # Get current balance with validation
         try:
-            current_balance = float(user.balance_usd or 0)
+            current_balance = float(user.balance or 0)
             
             # Validate balance integrity
             if current_balance < 0:
@@ -1846,12 +1712,12 @@ def get_balance():
                                  f'Negative balance detected: ${current_balance}')
                 # Reset to 0 if somehow negative
                 current_balance = 0
-                user.balance_usd = 0
+                user.balance = 0
                 
         except (ValueError, TypeError) as e:
             print(f"⚠️ Balance validation error: {str(e)}")
             current_balance = 0
-            user.balance_usd = 0
+            user.balance = 0
         
         # Calculate earnings statistics
         try:
@@ -2177,8 +2043,8 @@ def claim_daily_bonus():
         trust_multiplier = calculate_trust_multiplier(user)
         final_bonus = base_bonus * trust_multiplier
         
-        old_balance = user.balance_usd
-        user.balance_usd = float(user.balance_usd or 0) + final_bonus
+        old_balance = user.balance
+        user.balance = float(user.balance or 0) + final_bonus
         
         # Update bonus tracking fields
         user.daily_bonus_given = True
@@ -2225,7 +2091,7 @@ def claim_daily_bonus():
             'base_bonus': base_bonus,
             'trust_multiplier': trust_multiplier,
             'old_balance': old_balance,
-            'new_balance': user.balance_usd,
+            'new_balance': user.balance,
             'consecutive_days': user.consecutive_days,
             'verified_online_time': verified_online_time,
             'behavioral_score': user.behavioral_score,
@@ -3098,7 +2964,7 @@ def track_watch():
     if watch_time >= 30:
         user = User.query.get(user_id)
         user.total_watch_minutes += watch_time // 60
-        user.balance_usd += (watch_time / 60) * 0.01
+        user.balance += (watch_time / 60) * 0.01
         db.session.commit()
         
         # Log watch activity
@@ -3115,7 +2981,7 @@ def give_daily_bonus():
     user = User.query.get(user_id) 
     now = datetime.utcnow() 
     if user.last_login_date is None or (now - user.last_login_date).days >= 1: 
-        user.balance_usd += DAILY_REWARD 
+        user.balance += DAILY_REWARD 
         user.last_login_date = now 
         db.session.commit() 
         
@@ -3130,9 +2996,9 @@ def withdraw():
     user_id = session.get('user_id') 
     amount = float(request.form.get('amount')) 
     user = User.query.get(user_id) 
-    if user.balance_usd >= MIN_WITHDRAW_AMOUNT and amount <= user.balance_usd: 
+    if user.balance >= MIN_WITHDRAW_AMOUNT and amount <= user.balance: 
         req = WithdrawalRequest(user_id=user.id, amount=amount, status='pending') 
-        user.balance_usd -= amount 
+        user.balance -= amount 
         db.session.add(req) 
         db.session.commit() 
         
@@ -3247,8 +3113,6 @@ def terms():
 #==== Run App ====
 
 if __name__ == '__main__':
-    db.drop_all()
-    db.create_all()
     # Initialize database on startup
     init_db()
     app.run(debug=True)
@@ -3256,3 +3120,32 @@ else:
     # For production deployment (like Render)
     # Initialize database when app is imported
     init_db()
+
+
+def detect_proxy_vpn(ip):
+    # Dummy VPN/proxy detection for development
+    return False
+
+@app.route('/heartbeat', methods=['POST'])
+def heartbeat():
+    try:
+        user_id = session.get('user_id')
+        if not user_id:
+            return jsonify({'error': 'Not logged in'}), 401
+
+        data = request.get_json() or {}
+        fingerprint = data.get('fingerprint', '')
+        ip = request.remote_addr
+        user_agent = request.headers.get('User-Agent', '')
+
+        fingerprint_hash = generate_fingerprint_hash(fingerprint)
+        is_proxy = detect_proxy_vpn(ip)
+
+        return jsonify({
+            'fingerprint_hash': fingerprint_hash,
+            'is_proxy': is_proxy
+        }), 200
+
+    except Exception as e:
+        print(f"❌ Heartbeat error: {e}")
+        return jsonify({'error': 'Heartbeat failed'}), 500
