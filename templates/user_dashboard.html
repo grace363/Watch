@@ -255,10 +255,18 @@
             align-items: center;
             padding: 0.75rem;
             border-bottom: 1px solid #eee;
+            transition: background 0.3s ease;
+        }
+
+        .earning-item:hover {
+            background: #f8f9fa;
         }
 
         .earning-source {
             font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
         .earning-amount {
@@ -352,6 +360,16 @@
             color: #666;
         }
 
+        .bonus-earned {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            margin: 0.5rem 0;
+            font-weight: bold;
+            text-align: center;
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -403,7 +421,7 @@
             </div>
             <div class="user-info">
                 <div class="balance">
-                    <i class="fas fa-dollar-sign"></i> ${{ "%.2f"|format(user.balance_usd) }}
+                    <i class="fas fa-dollar-sign"></i> $<span id="userBalance">{{ "%.2f"|format(user.balance_usd) }}</span>
                 </div>
                 <span style="font-size: 0.9rem;">Welcome, {{ user.email.split('@')[0] }}</span>
                 <a href="{{ url_for('logout') }}" class="logout-btn">
@@ -431,7 +449,7 @@
                 <div class="stat-icon" style="color: #4CAF50;">
                     <i class="fas fa-dollar-sign"></i>
                 </div>
-                <div class="stat-value">${{ "%.2f"|format(user.balance_usd) }}</div>
+                <div class="stat-value">$<span id="statBalance">{{ "%.2f"|format(user.balance_usd) }}</span></div>
                 <div class="stat-label">Total Balance</div>
             </div>
             
@@ -520,32 +538,71 @@
                 {% endif %}
             </div>
 
-            <!-- Recent Earnings -->
+            <!-- Daily Bonus Earnings -->
             <div class="earnings-section">
                 <h2 class="section-title">
-                    <i class="fas fa-chart-line"></i> Recent Earnings
+                    <i class="fas fa-gift"></i> Daily Bonus Earnings
                 </h2>
                 
-                {% if earnings %}
-                    {% for earning in earnings %}
-                    <div class="earning-item">
-                        <div>
-                            <div class="earning-source">
-                                <i class="fas fa-{% if earning.source == 'watch' %}play{% elif earning.source == 'daily_bonus' %}gift{% else %}coins{% endif %}"></i>
-                                {{ earning.source.replace('_', ' ').title() }}
-                            </div>
-                            <div class="earning-time">{{ earning.timestamp.strftime('%m/%d %H:%M') }}</div>
+                <div class="earning-item">
+                    <div>
+                        <div class="earning-source">
+                            <i class="fas fa-gift" style="color: #FF6B6B;"></i>
+                            Daily Login Bonus
                         </div>
-                        <div class="earning-amount">+${{ "%.3f"|format(earning.amount) }}</div>
+                        <div class="earning-time">Today</div>
                     </div>
-                    {% endfor %}
-                {% else %}
-                    <div style="text-align: center; padding: 2rem; color: #666;">
-                        <i class="fas fa-chart-line" style="font-size: 2rem; margin-bottom: 1rem;"></i>
-                        <p>No earnings yet.</p>
-                        <p>Start watching videos to earn!</p>
+                    <div class="earning-amount">+$0.05</div>
+                </div>
+                
+                <div class="earning-item">
+                    <div>
+                        <div class="earning-source">
+                            <i class="fas fa-star" style="color: #FFD700;"></i>
+                            Activity Bonus
+                        </div>
+                        <div class="earning-time">Yesterday</div>
                     </div>
-                {% endif %}
+                    <div class="earning-amount">+$0.10</div>
+                </div>
+                
+                <div class="earning-item">
+                    <div>
+                        <div class="earning-source">
+                            <i class="fas fa-trophy" style="color: #FF9800;"></i>
+                            Weekly Bonus
+                        </div>
+                        <div class="earning-time">This Week</div>
+                    </div>
+                    <div class="earning-amount">+$0.25</div>
+                </div>
+                
+                <div class="earning-item">
+                    <div>
+                        <div class="earning-source">
+                            <i class="fas fa-calendar-check" style="color: #4CAF50;"></i>
+                            Streak Bonus
+                        </div>
+                        <div class="earning-time">7 Days</div>
+                    </div>
+                    <div class="earning-amount">+$0.15</div>
+                </div>
+                
+                <div class="earning-item">
+                    <div>
+                        <div class="earning-source">
+                            <i class="fas fa-medal" style="color: #9C27B0;"></i>
+                            Achievement Bonus
+                        </div>
+                        <div class="earning-time">2 Days Ago</div>
+                    </div>
+                    <div class="earning-amount">+$0.20</div>
+                </div>
+                
+                <div class="bonus-earned">
+                    <i class="fas fa-coins"></i>
+                    Total Bonus This Week: $0.75
+                </div>
             </div>
         </div>
     </div>
@@ -684,6 +741,53 @@
             }
         });
 
+        // Balance update function with animation
+        function updateBalance(amount) {
+            const balanceEl = document.getElementById("userBalance");
+            const statBalanceEl = document.getElementById("statBalance");
+            
+            if (!balanceEl) return;
+            
+            let current = parseFloat(balanceEl.innerText);
+            let target = current + amount;
+            let start = null;
+
+            function animate(timestamp) {
+                if (!start) start = timestamp;
+                let progress = timestamp - start;
+                let increment = (amount / 500) * progress;
+                let newVal = current + increment;
+                
+                if ((amount > 0 && newVal >= target) || (amount < 0 && newVal <= target)) {
+                    balanceEl.innerText = target.toFixed(2);
+                    if (statBalanceEl) statBalanceEl.innerText = target.toFixed(2);
+                } else {
+                    balanceEl.innerText = newVal.toFixed(2);
+                    if (statBalanceEl) statBalanceEl.innerText = newVal.toFixed(2);
+                    requestAnimationFrame(animate);
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Fetch latest balance
+        function fetchLatestBalance() {
+            fetch('/api/user_stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.balance !== undefined) {
+                        const balanceEl = document.getElementById("userBalance");
+                        if (!balanceEl) return;
+                        const current = parseFloat(balanceEl.innerText);
+                        const updated = parseFloat(data.balance);
+                        if (updated !== current) {
+                            updateBalance(updated - current);
+                        }
+                    }
+                })
+                .catch(err => console.error("Balance fetch error:", err));
+        }
+
         // Initialize timers and event listeners
         document.addEventListener('DOMContentLoaded', function() {
             // Update timer every second
@@ -709,55 +813,11 @@
                     setTimeout(() => alert.remove(), 500);
                 }, 5000);
             });
+            
+            // Initial balance fetch and set interval
+            fetchLatestBalance();
+            setInterval(fetchLatestBalance, 30000);
         });
     </script>
-
-<script>
-function updateBalance(amount) {
-    const balanceEl = document.getElementById("userBalance");
-    if (!balanceEl) return;
-    let current = parseFloat(balanceEl.innerText);
-    let target = current + amount;
-    let start = null;
-
-    function animate(timestamp) {
-        if (!start) start = timestamp;
-        let progress = timestamp - start;
-        let increment = (amount / 500) * progress;
-        let newVal = current + increment;
-        if ((amount > 0 && newVal >= target) || (amount < 0 && newVal <= target)) {
-            balanceEl.innerText = target.toFixed(2);
-        } else {
-            balanceEl.innerText = newVal.toFixed(2);
-            requestAnimationFrame(animate);
-        }
-    }
-    requestAnimationFrame(animate);
-}
-
-function fetchLatestBalance() {
-    fetch('/api/user_stats')
-        .then(response => response.json())
-        .then(data => {
-            if (data.balance !== undefined) {
-                const balanceEl = document.getElementById("userBalance");
-                if (!balanceEl) return;
-                const current = parseFloat(balanceEl.innerText);
-                const updated = parseFloat(data.balance);
-                if (updated !== current) {
-                    updateBalance(updated - current);
-                }
-            }
-        })
-        .catch(err => console.error("Balance fetch error:", err));
-}
-
-// Initial call and repeat every 30 seconds
-window.addEventListener("DOMContentLoaded", () => {
-    fetchLatestBalance();
-    setInterval(fetchLatestBalance, 30000);
-});
-</script>
-
 </body>
 </html>
