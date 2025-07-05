@@ -3247,6 +3247,8 @@ def terms():
 #==== Run App ====
 
 if __name__ == '__main__':
+    db.drop_all()
+    db.create_all()
     # Initialize database on startup
     init_db()
     app.run(debug=True)
