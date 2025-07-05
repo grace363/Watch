@@ -299,7 +299,9 @@ def cleanup_old_ip_logs(user_id):
 
             logs_to_delete = IPLog.query.filter_by(user_id=user_id)\
 
-                .order_by(IPLog.timestamp.asc())\
+user_ips = (
+                    .order_by(IPLog.timestamp.asc())
+)
 
                 .limit(log_count - MAX_IP_HISTORY)\
 
@@ -2394,7 +2396,9 @@ def user_dashboard():
 
     recent_earnings = Earning.query.filter_by(user_id=user.id)\
 
-        .order_by(Earning.timestamp.desc())\
+user_ips = (
+            .order_by(Earning.timestamp.desc())
+)
 
         .limit(10).all()
 
@@ -6038,7 +6042,9 @@ def get_user_ip_history(user_id):
 
     ip_logs = IPLog.query.filter_by(user_id=user_id)\
 
-        .order_by(IPLog.timestamp.desc())\
+user_ips = (
+            .order_by(IPLog.timestamp.desc())
+)
 
         .limit(50)\
 
