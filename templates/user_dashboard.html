@@ -397,14 +397,9 @@
                         </a>
                     </div>
                 </div>
-                
-    <div class="logo">
-        Balance: $<span id="userBalance">0.00</span>
-    </div>
-    <div class="logo">
+                <div class="logo">
                     <i class="fas fa-play-circle"></i> Watch & Earn
                 </div>
-    
             </div>
             <div class="user-info">
                 <div class="balance">
@@ -716,26 +711,53 @@
             });
         });
     </script>
+
+<script>
+function updateBalance(amount) {
+    const balanceEl = document.getElementById("userBalance");
+    if (!balanceEl) return;
+    let current = parseFloat(balanceEl.innerText);
+    let target = current + amount;
+    let start = null;
+
+    function animate(timestamp) {
+        if (!start) start = timestamp;
+        let progress = timestamp - start;
+        let increment = (amount / 500) * progress;
+        let newVal = current + increment;
+        if ((amount > 0 && newVal >= target) || (amount < 0 && newVal <= target)) {
+            balanceEl.innerText = target.toFixed(2);
+        } else {
+            balanceEl.innerText = newVal.toFixed(2);
+            requestAnimationFrame(animate);
+        }
+    }
+    requestAnimationFrame(animate);
+}
+
+function fetchLatestBalance() {
+    fetch('/api/user_stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.balance !== undefined) {
+                const balanceEl = document.getElementById("userBalance");
+                if (!balanceEl) return;
+                const current = parseFloat(balanceEl.innerText);
+                const updated = parseFloat(data.balance);
+                if (updated !== current) {
+                    updateBalance(updated - current);
+                }
+            }
+        })
+        .catch(err => console.error("Balance fetch error:", err));
+}
+
+// Initial call and repeat every 30 seconds
+window.addEventListener("DOMContentLoaded", () => {
+    fetchLatestBalance();
+    setInterval(fetchLatestBalance, 30000);
+});
+</script>
+
 </body>
 </html>
-    <script>
-        function updateBalance(amount) {
-            const balanceEl = document.getElementById("userBalance");
-            if (!balanceEl) return;
-            const start = parseFloat(balanceEl.innerText) || 0;
-            const end = start + amount;
-            let current = start;
-            const increment = (end - start) / 40;
-            const step = () => {
-                current += increment;
-                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
-                    balanceEl.innerText = end.toFixed(2);
-                } else {
-                    balanceEl.innerText = current.toFixed(2);
-                    requestAnimationFrame(step);
-                }
-            };
-            step();
-        }
-    </script>
-    
