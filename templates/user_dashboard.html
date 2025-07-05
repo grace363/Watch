@@ -22,7 +22,7 @@
         .dashboard-header {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            padding: 1rem 2rem;
+            padding: 0.5rem 1rem;
             box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
             position: sticky;
             top: 0;
@@ -38,33 +38,95 @@
         }
 
         .logo {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             font-weight: bold;
             color: #667eea;
+        }
+
+        .hamburger-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .hamburger-btn {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #667eea;
+            cursor: pointer;
+            padding: 0.3rem;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger-btn:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .hamburger-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 1000;
+        }
+
+        .hamburger-dropdown.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: #333;
+            text-decoration: none;
+            transition: background 0.3s ease;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background: #f8f9fa;
+        }
+
+        .dropdown-item i {
+            margin-right: 0.5rem;
+            width: 16px;
+            text-align: center;
         }
 
         .user-info {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.5rem;
         }
 
         .balance {
             background: linear-gradient(135deg, #4CAF50, #45a049);
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
             font-weight: bold;
+            font-size: 0.9rem;
         }
 
         .logout-btn {
             background: #ff4757;
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
+            padding: 0.3rem 0.8rem;
             border-radius: 5px;
             text-decoration: none;
             transition: background 0.3s;
+            font-size: 0.85rem;
         }
 
         .logout-btn:hover {
@@ -297,7 +359,7 @@
             
             .header-content {
                 flex-direction: column;
-                gap: 1rem;
+                gap: 0.5rem;
             }
             
             .user-info {
@@ -318,14 +380,32 @@
 <body>
     <div class="dashboard-header">
         <div class="header-content">
-            <div class="logo">
-                <i class="fas fa-play-circle"></i> Watch & Earn
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div class="hamburger-menu">
+                    <button class="hamburger-btn" onclick="toggleHamburgerMenu()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="hamburger-dropdown" id="hamburgerDropdown">
+                        <a href="earnings.html" class="dropdown-item">
+                            <i class="fas fa-chart-line"></i> Earnings
+                        </a>
+                        <a href="admin.html" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Admin Panel
+                        </a>
+                        <a href="support.html" class="dropdown-item">
+                            <i class="fas fa-headset"></i> Support
+                        </a>
+                    </div>
+                </div>
+                <div class="logo">
+                    <i class="fas fa-play-circle"></i> Watch & Earn
+                </div>
             </div>
             <div class="user-info">
                 <div class="balance">
                     <i class="fas fa-dollar-sign"></i> ${{ "%.2f"|format(user.balance_usd) }}
                 </div>
-                <span>Welcome, {{ user.email.split('@')[0] }}</span>
+                <span style="font-size: 0.9rem;">Welcome, {{ user.email.split('@')[0] }}</span>
                 <a href="{{ url_for('logout') }}" class="logout-btn">
                     <i class="fas fa-sign-out-alt"></i> Logout
                 </a>
@@ -588,6 +668,22 @@
             });
         }
 
+        // Hamburger menu toggle
+        function toggleHamburgerMenu() {
+            const dropdown = document.getElementById('hamburgerDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close hamburger menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const dropdown = document.getElementById('hamburgerDropdown');
+            
+            if (!hamburgerMenu.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
         // Initialize timers and event listeners
         document.addEventListener('DOMContentLoaded', function() {
             // Update timer every second
@@ -615,68 +711,5 @@
             });
         });
     </script>
-
-<div id="user-stats" style="margin: 20px;">
-  <h3>User Stats</h3>
-  <p><strong>Total Earnings:</strong> <span id="stat-total-earnings">$0.00</span></p>
-  <p><strong>Bonuses Claimed:</strong> <span id="stat-bonuses-claimed">0</span></p>
-  <p><strong>Referrals:</strong> <span id="stat-referrals">0</span></p>
-</div>
-
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    fetch('/api/user_stats')
-        .then(response => response.json())
-        .then(data => {
-            if (data.total_earnings !== undefined) {
-                document.getElementById('stat-total-earnings').innerText = `$${data.total_earnings.toFixed(2)}`;
-            }
-            if (data.bonuses_claimed !== undefined) {
-                document.getElementById('stat-bonuses-claimed').innerText = data.bonuses_claimed;
-            }
-            if (data.referrals !== undefined) {
-                document.getElementById('stat-referrals').innerText = data.referrals;
-            }
-        });
-});
-</script>
-
-
-<style>
-.menu-icon {
-  cursor: pointer;
-  font-size: 24px;
-  padding: 10px;
-}
-.menu-dropdown {
-  display: none;
-  position: absolute;
-  background-color: #fff;
-  top: 50px;
-  left: 10px;
-  border: 1px solid #ccc;
-  padding: 10px;
-  z-index: 999;
-}
-.menu-dropdown a {
-  display: block;
-  padding: 5px 10px;
-  text-decoration: none;
-  color: #000;
-}
-</style>
-
-<div class="menu-icon" onclick="toggleMenu()">☰</div>
-<div class="menu-dropdown" id="menuDropdown">
-  <a href="/earnings">Earnings History</a>
-</div>
-
-<script>
-function toggleMenu() {
-  const menu = document.getElementById('menuDropdown');
-  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-}
-</script>
-
 </body>
 </html>
