@@ -1984,7 +1984,6 @@ def get_balance():
 
         try:
 
-            is_proxy = detect_proxy_vpn(user_ip)
 
             if is_proxy:
 
@@ -1994,7 +1993,6 @@ def get_balance():
 
         except Exception as e:
 
-            print(f"⚠️ Proxy detection failed: {str(e)}")
 
             is_proxy = False
 
