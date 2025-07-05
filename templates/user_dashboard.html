@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -76,14 +77,13 @@
 <body>
     <div class="navbar">
         <div class="hamburger" id="menu-toggle">&#9776;</div>
-        <div>Welcome, <span id="user-email">user@example.com</span></div>
+        <div>Welcome, <span id="user-email">Loading...</span></div>
     </div>
 
     <div class="sidebar" id="sidebar">
         <a href="#">Profile</a>
         <a href="#">Earnings</a>
         <a href="/youtuber_dashboard">Upload Video</a>
-        <a href="#">Settings</a>
         <a href="/logout">Logout</a>
     </div>
 
@@ -105,10 +105,12 @@
         async function fetchUserData() {
             try {
                 const res = await fetch("/api/user_info");
+                if (!res.ok) throw new Error("User info fetch failed");
                 const data = await res.json();
                 document.getElementById("user-email").textContent = data.email;
                 document.getElementById("balance").textContent = "$" + parseFloat(data.balance_usd).toFixed(3);
             } catch (err) {
+                document.getElementById("user-email").textContent = "Unavailable";
                 console.error("Failed to load user data", err);
             }
         }
@@ -117,24 +119,24 @@
             try {
                 const res = await fetch("/api/claim_daily_bonus", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json" }
                 });
                 const data = await res.json();
                 if (data.success) {
                     document.getElementById("balance").textContent = "$" + parseFloat(data.new_balance).toFixed(3);
-                    alert("🎉 Daily bonus claimed!");
+                    alert("🎉 Bonus claimed!");
                 } else {
-                    alert("❌ " + (data.error || "Failed to claim bonus"));
+                    alert("❌ " + (data.error || "Could not claim bonus"));
                 }
             } catch (err) {
-                alert("❌ Network error");
+                alert("❌ Network error while claiming bonus");
                 console.error(err);
             }
         }
 
         document.getElementById("claim-bonus").onclick = claimBonus;
 
-        // Load user info on page load
+        // Load data on startup
         fetchUserData();
     </script>
 </body>
