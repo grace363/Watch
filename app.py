@@ -1202,6 +1202,11 @@ def user_dashboard():
                          DAILY_REWARD=DAILY_REWARD,
                          SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
                          VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
+                         MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
+                         DAILY_ONLINE_TIME=DAILY_ONLINE_TIME,
+                         DAILY_REWARD=DAILY_REWARD,
+                         SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
+                         VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
 
 # Configuration for file uploads - moved to environment variables
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads/videos')
