@@ -1572,3 +1572,7 @@ else:
     # For production deployment (like Render)
     # Initialize database when app is imported
     init_db()
+
+@app.route("/api/stats", methods=["GET"])
+def alias_user_stats():
+    return user_stats()
