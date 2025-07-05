@@ -888,51 +888,32 @@ def complete_video():
 
 @app.route('/api/claim_daily_bonus', methods=['POST'])
 def claim_daily_bonus():
-    """Claim daily bonus if user stayed online for required time"""
     if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
-    
-    try:
-        user = User.query.get(session['user_id'])
-        
-        if not user or user.is_banned:
-            return jsonify({'error': 'Account unavailable'}), 403
-        
-        if user.daily_bonus_given:
-            return jsonify({'error': 'Daily bonus already claimed'}), 400
-        
-        if user.daily_online_time < DAILY_ONLINE_TIME:
-            return jsonify({
-                'error': f'Need to stay online for {DAILY_ONLINE_TIME} seconds. You have {user.daily_online_time} seconds.',
-                'required': DAILY_ONLINE_TIME,
-                'current': user.daily_online_time
-            }), 400
-        
-        # Give daily bonus
-        user.balance_usd += DAILY_REWARD
-        user.daily_bonus_given = True
-        
-        # Log earning
-        earning = Earning(
-            user_id=user.id,
-            amount=DAILY_REWARD,
-            source='daily_bonus'
-        )
-        db.session.add(earning)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'bonus': DAILY_REWARD,
-            'new_balance': user.balance_usd
-        })
-        
-    except Exception as e:
-        print(f"❌ Daily bonus error: {str(e)}")
-        db.session.rollback()
-        return jsonify({'error': 'Failed to claim bonus'}), 500
+        return jsonify({'error': 'Unauthorized'}), 401
 
-@app.route('/youtuber_dashboard')
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    if user.daily_bonus_given:
+        return jsonify({'error': 'Daily bonus already claimed'}), 400
+
+    if user.daily_online_time < DAILY_ONLINE_TIME:
+        return jsonify({'error': 'Not enough online time today'}), 400
+
+    user.balance_usd += DAILY_REWARD
+    user.daily_bonus_given = True
+
+    earning = Earning(user_id=user.id, amount=DAILY_REWARD, source='daily_bonus')
+    db.session.add(earning)
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'bonus': DAILY_REWARD,
+        'new_balance': user.balance_usd
+    })@app.route('/youtuber_dashboard')
 def youtuber_dashboard():
     if 'user_id' not in session or session.get('account_type') != 'YouTuber':
         return redirect(url_for('login'))
