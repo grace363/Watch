@@ -2,16 +2,36 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Earnings History</title>
+    <title>Earnings Summary</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
+        h2 { text-align: center; }
+        .summary-boxes { display: flex; justify-content: space-around; margin-bottom: 30px; }
+        .summary { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); width: 30%; text-align: center; }
+        .summary h3 { margin-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; background: white; }
         th, td { padding: 10px; border: 1px solid #ccc; text-align: left; }
-        th { background-color: #f2f2f2; }
+        th { background-color: #eee; }
     </style>
 </head>
 <body>
-    <h2>Your Earnings History</h2>
+    <h2>Your Earnings Overview</h2>
+    <div class="summary-boxes">
+        <div class="summary">
+            <h3>Total Earnings</h3>
+            <p id="total-earnings">$0.00</p>
+        </div>
+        <div class="summary">
+            <h3>Total Bonuses</h3>
+            <p id="total-bonuses">$0.00</p>
+        </div>
+        <div class="summary">
+            <h3>Total Referrals</h3>
+            <p id="total-referrals">0</p>
+        </div>
+    </div>
+
+    <h2>Earnings History</h2>
     <table>
         <thead>
             <tr>
@@ -29,11 +49,26 @@
         .then(response => response.json())
         .then(data => {
             const tbody = document.getElementById('earnings-body');
+            let total = 0, bonuses = 0;
+
             data.earnings.forEach(entry => {
                 const row = document.createElement('tr');
                 row.innerHTML = `<td>${entry.type}</td><td>$${entry.amount.toFixed(2)}</td><td>${entry.timestamp}</td>`;
                 tbody.appendChild(row);
+                total += entry.amount;
+                if (entry.type.toLowerCase().includes("bonus")) {
+                    bonuses += entry.amount;
+                }
             });
+
+            document.getElementById("total-earnings").textContent = `$${total.toFixed(2)}`;
+            document.getElementById("total-bonuses").textContent = `$${bonuses.toFixed(2)}`;
+        });
+
+        fetch('/api/user_stats')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById("total-referrals").textContent = data.total_referrals;
         });
     </script>
 </body>
