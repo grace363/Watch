@@ -616,61 +616,67 @@
         });
     </script>
 
-    <script>
-        document.getElementById("claimBonusBtn").addEventListener("click", function() {
-            const btn = this;
-            btn.disabled = true;
-            fetch("/api/claim_daily_bonus", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                const msg = document.getElementById("bonusMessage");
-                if (data.success) {
-                    msg.textContent = `✅ Claimed $${data.bonus} successfully! New balance: $${data.new_balance.toFixed(2)}`;
-                    
-btn.style.display = "none";
-const balanceDisplay = document.getElementById("userBalance");
-if (balanceDisplay) {
-    const currentBalance = parseFloat(balanceDisplay.textContent.replace('$', '')) || 0;
-    animateBalanceUpdate(balanceDisplay, currentBalance, data.new_balance, 1000);
-}
-
-                    const balanceDisplay = document.getElementById("userBalance");
-                    if (balanceDisplay) {
-                        balanceDisplay.textContent = `$${data.new_balance.toFixed(2)}`;
-                    }
-                } else if (data.error) {
-                    msg.textContent = `❌ ${data.error}`;
-                    btn.disabled = false;
-                }
-            })
-            .catch(err => {
-                document.getElementById("bonusMessage").textContent = "❌ Failed to claim bonus.";
-                btn.disabled = false;
-            });
-        });
-    </script>
+<div id="user-stats" style="margin: 20px;">
+  <h3>User Stats</h3>
+  <p><strong>Total Earnings:</strong> <span id="stat-total-earnings">$0.00</span></p>
+  <p><strong>Bonuses Claimed:</strong> <span id="stat-bonuses-claimed">0</span></p>
+  <p><strong>Referrals:</strong> <span id="stat-referrals">0</span></p>
+</div>
 
 <script>
-function animateBalanceUpdate(el, start, end, duration) {
-    let startTime = null;
-    function animate(timestamp) {
-        if (!startTime) startTime = timestamp;
-        const progress = timestamp - startTime;
-        const percent = Math.min(progress / duration, 1);
-        const current = start + (end - start) * percent;
-        el.textContent = `$${current.toFixed(2)}`;
-        if (percent < 1) {
-            requestAnimationFrame(animate);
-        }
-    }
-    requestAnimationFrame(animate);
+document.addEventListener("DOMContentLoaded", function () {
+    fetch('/api/user_stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.total_earnings !== undefined) {
+                document.getElementById('stat-total-earnings').innerText = `$${data.total_earnings.toFixed(2)}`;
+            }
+            if (data.bonuses_claimed !== undefined) {
+                document.getElementById('stat-bonuses-claimed').innerText = data.bonuses_claimed;
+            }
+            if (data.referrals !== undefined) {
+                document.getElementById('stat-referrals').innerText = data.referrals;
+            }
+        });
+});
+</script>
+
+
+<style>
+.menu-icon {
+  cursor: pointer;
+  font-size: 24px;
+  padding: 10px;
+}
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  background-color: #fff;
+  top: 50px;
+  left: 10px;
+  border: 1px solid #ccc;
+  padding: 10px;
+  z-index: 999;
+}
+.menu-dropdown a {
+  display: block;
+  padding: 5px 10px;
+  text-decoration: none;
+  color: #000;
+}
+</style>
+
+<div class="menu-icon" onclick="toggleMenu()">☰</div>
+<div class="menu-dropdown" id="menuDropdown">
+  <a href="/earnings">Earnings History</a>
+</div>
+
+<script>
+function toggleMenu() {
+  const menu = document.getElementById('menuDropdown');
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
 }
 </script>
-</body>
 
+</body>
 </html>
