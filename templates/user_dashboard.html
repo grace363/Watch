@@ -631,13 +631,17 @@
                 const msg = document.getElementById("bonusMessage");
                 if (data.success) {
                     msg.textContent = `✅ Claimed $${data.bonus} successfully! New balance: $${data.new_balance.toFixed(2)}`;
-                    btn.style.display = "none";
-                    const balanceDisplay = document.getElementById("userBalance");
-                    if (balanceDisplay) {
-                        
+                    
+btn.style.display = "none";
+const balanceDisplay = document.getElementById("userBalance");
+if (balanceDisplay) {
     const currentBalance = parseFloat(balanceDisplay.textContent.replace('$', '')) || 0;
     animateBalanceUpdate(balanceDisplay, currentBalance, data.new_balance, 1000);
-    
+}
+
+                    const balanceDisplay = document.getElementById("userBalance");
+                    if (balanceDisplay) {
+                        balanceDisplay.textContent = `$${data.new_balance.toFixed(2)}`;
                     }
                 } else if (data.error) {
                     msg.textContent = `❌ ${data.error}`;
@@ -667,7 +671,6 @@ function animateBalanceUpdate(el, start, end, duration) {
     requestAnimationFrame(animate);
 }
 </script>
-
 </body>
 
 </html>
