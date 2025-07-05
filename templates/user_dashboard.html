@@ -651,9 +651,30 @@
                     document.querySelector('.daily-bonus-section').style.display = 'none';
                     
                     // Update balance
-                    setTimeout(() => {
-                        location.reload();
-                    }, 2000);
+                    
+    const balanceElement = document.getElementById("userBalance");
+    const currentBalance = parseFloat(balanceElement.innerText.replace('$', ''));
+    const newBalance = currentBalance + data.bonus;
+
+    let start = currentBalance;
+    let end = newBalance;
+    let duration = 1500;
+    let startTime = null;
+
+    function animateBalance(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = timestamp - startTime;
+        const val = start + (end - start) * (progress / duration);
+        balanceElement.innerText = "$" + val.toFixed(2);
+        if (progress < duration) {
+            requestAnimationFrame(animateBalance);
+        } else {
+            balanceElement.innerText = "$" + end.toFixed(2);
+        }
+    }
+
+    requestAnimationFrame(animateBalance);
+    
                 } else {
                     alert('Error: ' + data.error);
                     bonusBtn.disabled = false;
@@ -757,6 +778,23 @@ window.addEventListener("DOMContentLoaded", () => {
     fetchLatestBalance();
     setInterval(fetchLatestBalance, 30000);
 });
+</script>
+
+
+<script>
+    function updateBalanceFromStats() {
+        fetch('/api/stats')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.balance !== undefined) {
+                    const balanceElement = document.getElementById("userBalance");
+                    balanceElement.innerText = "$" + parseFloat(data.balance).toFixed(2);
+                }
+            })
+            .catch(err => console.error("Auto-update balance failed:", err));
+    }
+
+    setInterval(updateBalanceFromStats, 30000);
 </script>
 
 </body>
