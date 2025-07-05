@@ -237,7 +237,7 @@ class User(db.Model):
     last_login_date = db.Column(db.DateTime) 
     total_watch_minutes = db.Column(db.Integer, default=0) 
     daily_bonus_given = db.Column(db.Boolean, default=False) 
-    balance_usd = db.Column(db.Float, default=0.0)
+    balance = db.Column(db.Float, default=0.0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_ip = db.Column(db.String(45))  # Store last known IP (IPv6 can be up to 45 chars)
     first_name = db.Column(db.String(50))
