@@ -478,6 +478,8 @@ class User(db.Model):
     daily_bonus_given = db.Column(db.Boolean, default=False) 
 
     balance = db.Column(db.Float, default=0.0)
+    total_watch_minutes = db.Column(db.Integer, default=0)
+    videos_watched_today = db.Column(db.Integer, default=0)
 
     total_videos_watched = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
