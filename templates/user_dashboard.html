@@ -536,7 +536,7 @@
                             </div>
                             <div class="earning-time">{{ earning.timestamp.strftime('%m/%d %H:%M') }}</div>
                         </div>
-                        <div class="earning-amount">+${{ "%.3f"|format(earning.amount) }}</div>
+                        <div class="earning-amount" id="balance">+${{ "%.3f"|format(earning.amount) }}</div>
                     </div>
                     {% endfor %}
                 {% else %}
@@ -795,6 +795,36 @@ window.addEventListener("DOMContentLoaded", () => {
     }
 
     setInterval(updateBalanceFromStats, 30000);
+</script>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const bonusBtn = document.getElementById("claim-bonus");
+    const balanceDisplay = document.getElementById("balance");
+
+    if (bonusBtn && balanceDisplay) {
+        bonusBtn.addEventListener("click", async () => {
+            try {
+                const res = await fetch("/api/claim_daily_bonus", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    balanceDisplay.textContent = "+$" + parseFloat(data.new_balance).toFixed(3);
+                    alert("🎉 Daily bonus claimed!");
+                } else {
+                    alert("❌ " + (data.error || "Failed to claim bonus"));
+                }
+            } catch (err) {
+                alert("❌ Network error");
+                console.error(err);
+            }
+        });
+    }
+});
 </script>
 
 </body>
