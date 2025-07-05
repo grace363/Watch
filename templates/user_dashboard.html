@@ -376,9 +376,26 @@
             display: none;
         }
     </style>
+
+<style>
+.balance-pill {
+  background-color: #4caf50;
+  color: white;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 1em;
+  margin-left: auto;
+  margin-right: 15px;
+}
+</style>
+
 </head>
 <body>
     <div class="dashboard-header">
+
+        <div class="balance-pill" id="userBalance">
+        </div>
         <div class="header-content">
             <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <div class="hamburger-menu">
@@ -403,7 +420,9 @@
             </div>
             <div class="user-info">
                 <div class="balance">
-                    <i class="fas fa-dollar-sign"></i> ${{ "%.2f"|format(user.balance_usd) }}
+<div class="balance-label">
+<div class="balance-label"><strong>Your Wallet: $<span id="userWalletBalance">{{ "%.2f"|format(user.balance_usd) }}</span></strong></div>
+</div>
                 </div>
                 <span style="font-size: 0.9rem;">Welcome, {{ user.email.split('@')[0] }}</span>
                 <a href="{{ url_for('logout') }}" class="logout-btn">
@@ -431,7 +450,6 @@
                 <div class="stat-icon" style="color: #4CAF50;">
                     <i class="fas fa-dollar-sign"></i>
                 </div>
-                <div class="stat-value">${{ "%.2f"|format(user.balance_usd) }}</div>
                 <div class="stat-label">Total Balance</div>
             </div>
             
@@ -841,6 +859,7 @@ document.addEventListener("DOMContentLoaded", function () {
       .then(data => {
         if (data.success) {
           animateCoinBalance(data.new_balance);
+          animateCoinBalance(data.new_balance);
           alert(data.message || "Bonus claimed!");
         } else {
           alert(data.error || "Failed to claim bonus.");
@@ -856,4 +875,30 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 });
+</script>
+<script>
+function animateCoinBalance(newBalance) {
+  const ids = ["userBalance", "userWalletBalance"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const current = parseFloat(el.innerText.replace('$', '')) || 0;
+    const steps = 30;
+    let step = 0;
+    const increment = (newBalance - current) / steps;
+
+    function update() {
+      if (step < steps) {
+        step++;
+        el.innerText = (current + increment * step).toFixed(2);
+        requestAnimationFrame(update);
+      } else {
+        el.innerText = newBalance.toFixed(2);
+      }
+    }
+
+    update();
+  });
+}
 </script>
