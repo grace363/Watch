@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTuber Dashboard - Watch & Earn</title>
+    <title>User Dashboard - Watch & Earn</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -19,749 +19,887 @@
             color: #333;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
+        .dashboard-header {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
-        .header h1 {
-            color: #4a5568;
-            margin-bottom: 10px;
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .hamburger-menu {
+            position: relative;
+            display: inline-block;
+        }
+
+        .hamburger-btn {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            color: #667eea;
+            cursor: pointer;
+            padding: 0.3rem;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .hamburger-btn:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .hamburger-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: white;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 1000;
+        }
+
+        .hamburger-dropdown.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: #333;
+            text-decoration: none;
+            transition: background 0.3s ease;
+            border-bottom: 1px solid #eee;
+        }
+
+        .dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .dropdown-item:hover {
+            background: #f8f9fa;
+        }
+
+        .dropdown-item i {
+            margin-right: 0.5rem;
+            width: 16px;
+            text-align: center;
+        }
+
+        .user-info {
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 0.5rem;
         }
 
-        .header h1 i {
-            color: #e53e3e;
-            font-size: 2rem;
+        .balance {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
         }
 
-        .welcome-text {
-            color: #666;
-            font-size: 1.1rem;
+        .logout-btn {
+            background: #ff4757;
+            color: white;
+            border: none;
+            padding: 0.3rem 0.8rem;
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background 0.3s;
+            font-size: 0.85rem;
+        }
+
+        .logout-btn:hover {
+            background: #ff3742;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
         }
 
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .stat-card {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
+            padding: 1.5rem;
             border-radius: 15px;
-            padding: 25px;
-            text-align: center;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
+            text-align: center;
+            transition: transform 0.3s ease;
         }
 
         .stat-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
         }
 
         .stat-icon {
-            font-size: 2.5rem;
-            margin-bottom: 15px;
-            display: block;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
         }
 
-        .stat-icon.videos { color: #e53e3e; }
-        .stat-icon.views { color: #3182ce; }
-        .stat-icon.revenue { color: #38a169; }
-        .stat-icon.active { color: #d69e2e; }
-
-        .stat-number {
-            font-size: 2rem;
+        .stat-value {
+            font-size: 1.8rem;
             font-weight: bold;
-            color: #2d3748;
-            margin-bottom: 5px;
+            margin-bottom: 0.5rem;
         }
 
         .stat-label {
             color: #666;
             font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
         }
 
-        .dashboard-grid {
+        .main-content {
             display: grid;
             grid-template-columns: 2fr 1fr;
-            gap: 30px;
-            margin-bottom: 30px;
+            gap: 2rem;
+            margin-top: 2rem;
         }
 
-        @media (max-width: 968px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        .card {
+        .videos-section, .earnings-section {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
             border-radius: 15px;
-            padding: 25px;
+            padding: 1.5rem;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        .card-header {
-            display: flex;
-            justify-content: between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #f1f5f9;
-        }
-
-        .card-title {
+        .section-title {
             font-size: 1.3rem;
-            font-weight: 600;
-            color: #2d3748;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            margin-bottom: 1rem;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 0.5rem;
         }
 
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, #38a169 0%, #2f855a 100%);
-            color: white;
-        }
-
-        .btn-success:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(56, 161, 105, 0.4);
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(229, 62, 62, 0.4);
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-            color: #4a5568;
-        }
-
-        .form-control {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e2e8f0;
+        .video-card {
+            background: #f8f9fa;
             border-radius: 10px;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            background: rgba(255, 255, 255, 0.9);
-        }
-
-        .form-control:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .video-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            background: rgba(255, 255, 255, 0.7);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid #667eea;
             transition: all 0.3s ease;
         }
 
-        .video-item:hover {
-            background: rgba(255, 255, 255, 0.9);
+        .video-card:hover {
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             transform: translateX(5px);
         }
 
-        .video-info h4 {
-            color: #2d3748;
-            margin-bottom: 5px;
+        .video-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
         }
 
         .video-meta {
-            font-size: 0.85rem;
-            color: #666;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        .video-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .quick-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .action-card {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            border: 2px solid transparent;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .action-card:hover {
-            border-color: #667eea;
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        .action-icon {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            display: block;
-        }
-
-        .action-title {
-            font-weight: 600;
-            color: #2d3748;
-            margin-bottom: 5px;
-        }
-
-        .action-desc {
-            font-size: 0.85rem;
-            color: #666;
-        }
-
-        .alert {
-            padding: 15px 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border-left: 4px solid;
-        }
-
-        .alert-success {
-            background: rgba(56, 161, 105, 0.1);
-            border-left-color: #38a169;
-            color: #2f855a;
-        }
-
-        .alert-warning {
-            background: rgba(214, 158, 46, 0.1);
-            border-left-color: #d69e2e;
-            color: #b7791f;
-        }
-
-        .alert-info {
-            background: rgba(49, 130, 206, 0.1);
-            border-left-color: #3182ce;
-            color: #2c5aa0;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
-        }
-
-        .modal-content {
-            background: white;
-            margin: 5% auto;
-            padding: 0;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            animation: modalSlideIn 0.3s ease-out;
-        }
-
-        @keyframes modalSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .modal-header {
-            padding: 25px;
-            border-bottom: 1px solid #e2e8f0;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 0.5rem;
         }
 
-        .modal-body {
-            padding: 25px;
+        .watch-btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
         }
 
-        .close {
-            color: #999;
-            font-size: 28px;
+        .watch-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .watch-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .earning-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+        }
+
+        .earning-source {
+            font-weight: 500;
+        }
+
+        .earning-amount {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .earning-time {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .daily-bonus-section {
+            background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+            color: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .bonus-timer {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+
+        .claim-bonus-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            padding: 0.7rem 1.5rem;
+            border-radius: 25px;
             font-weight: bold;
             cursor: pointer;
-            transition: color 0.3s ease;
+            transition: all 0.3s ease;
         }
 
-        .close:hover {
-            color: #333;
+        .claim-bonus-btn:hover:not(:disabled) {
+            background: white;
+            color: #FF6B6B;
         }
 
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+        .claim-bonus-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
-        .status-active {
-            background: rgba(56, 161, 105, 0.2);
-            color: #2f855a;
+        .alert {
+            padding: 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
         }
 
-        .status-inactive {
-            background: rgba(229, 62, 62, 0.2);
-            color: #c53030;
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .progress-bar {
+            background: rgba(255, 255, 255, 0.3);
+            height: 8px;
+            border-radius: 4px;
+            margin: 0.5rem 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: white;
+            border-radius: 4px;
+            transition: width 0.3s ease;
         }
 
         .no-videos {
             text-align: center;
-            padding: 40px 20px;
-            color: #666;
-        }
-
-        .no-videos i {
-            font-size: 3rem;
-            margin-bottom: 15px;
-            color: #ccc;
-        }
-
-        .chart-container {
-            height: 300px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.02);
-            border-radius: 10px;
+            padding: 2rem;
             color: #666;
         }
 
         @media (max-width: 768px) {
-            .container {
-                padding: 15px;
+            .main-content {
+                grid-template-columns: 1fr;
             }
-
-            .header {
-                padding: 20px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            }
-
-            .video-item {
+            
+            .header-content {
                 flex-direction: column;
-                align-items: flex-start;
-                gap: 15px;
+                gap: 0.5rem;
             }
-
-            .video-actions {
-                width: 100%;
-                justify-content: flex-end;
+            
+            .user-info {
+                justify-content: center;
             }
-
-            .quick-actions {
+            
+            .stats-grid {
                 grid-template-columns: 1fr;
             }
         }
+
+        /* CSRF Token hidden input */
+        input[name="csrf_token"] {
+            display: none;
+        }
     </style>
+
+<style>
+.balance-pill {
+  background-color: #4caf50;
+  color: white;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 1em;
+  margin-left: auto;
+  margin-right: 15px;
+}
+</style>
+
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>
-                <i class="fab fa-youtube"></i>
-                YouTuber Dashboard
-            </h1>
-            <p class="welcome-text">Welcome back! Manage your videos and track your performance.</p>
-        </div>
+    <div class="dashboard-header">
 
-        <!-- Stats Grid -->
+        <div class="balance-pill" id="userBalance">
+        </div>
+        <div class="header-content">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div class="hamburger-menu">
+                    <button class="hamburger-btn" onclick="toggleHamburgerMenu()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <div class="hamburger-dropdown" id="hamburgerDropdown">
+                        <a href="earnings.html" class="dropdown-item">
+                            <i class="fas fa-chart-line"></i> Earnings
+                        </a>
+                        <a href="admin.html" class="dropdown-item">
+                            <i class="fas fa-cog"></i> Admin Panel
+                        </a>
+                        <a href="support.html" class="dropdown-item">
+                            <i class="fas fa-headset"></i> Support
+                        </a>
+                    </div>
+                </div>
+                <div class="logo">
+                    <i class="fas fa-play-circle"></i> Watch & Earn
+                </div>
+            </div>
+            <div class="user-info">
+                <div class="balance">
+<div class="balance-label">
+<div class="balance-label"><strong>Your Wallet: $<span id="userWalletBalance">{{ "%.2f"|format(user.balance_usd) }}</span></strong></div>
+</div>
+                </div>
+                <span style="font-size: 0.9rem;">Welcome, {{ user.email.split('@')[0] }}</span>
+                <a href="{{ url_for('logout') }}" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'error' if category == 'error' else 'success' if category == 'success' else 'warning' }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Statistics Cards -->
         <div class="stats-grid">
             <div class="stat-card">
-                <i class="fas fa-video stat-icon videos"></i>
-                <div class="stat-number">{{ user_videos|length }}</div>
-                <div class="stat-label">Total Videos</div>
+                <div class="stat-icon" style="color: #4CAF50;">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+                <div class="stat-label">Total Balance</div>
             </div>
+            
             <div class="stat-card">
-                <i class="fas fa-eye stat-icon views"></i>
-                <div class="stat-number">{{ total_watches or 0 }}</div>
-                <div class="stat-label">Total Views</div>
+                <div class="stat-icon" style="color: #2196F3;">
+                    <i class="fas fa-play"></i>
+                </div>
+                <div class="stat-value">{{ user.videos_watched_today }}/{{ MAX_VIDEOS_PER_DAY or 50 }}</div>
+                <div class="stat-label">Videos Today</div>
             </div>
+            
             <div class="stat-card">
-                <i class="fas fa-dollar-sign stat-icon revenue"></i>
-                <div class="stat-number">${{ "%.2f"|format(total_revenue or 0) }}</div>
-                <div class="stat-label">Total Revenue</div>
+                <div class="stat-icon" style="color: #FF9800;">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-value">{{ user.total_watch_minutes }}</div>
+                <div class="stat-label">Total Minutes</div>
             </div>
+            
             <div class="stat-card">
-                <i class="fas fa-play-circle stat-icon active"></i>
-                <div class="stat-number">{{ active_videos or 0 }}</div>
-                <div class="stat-label">Active Videos</div>
+                <div class="stat-icon" style="color: {% if user.daily_bonus_given %}#4CAF50{% else %}#ff4757{% endif %};">
+                    <i class="fas fa-gift"></i>
+                </div>
+                <div class="stat-value">{% if user.daily_bonus_given %}✓{% else %}{{ videos_remaining or 0 }}{% endif %}</div>
+                <div class="stat-label">{% if user.daily_bonus_given %}Bonus Claimed{% else %}Videos Left{% endif %}</div>
             </div>
         </div>
 
-        <!-- Dashboard Grid -->
-        <div class="dashboard-grid">
-            <!-- Video Management -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <i class="fas fa-video"></i>
-                        My Videos
-                    </h3>
-                    <button class="btn btn-primary" onclick="openModal('addVideoModal')">
-                        <i class="fas fa-plus"></i>
-                        Add Video
-                    </button>
-                </div>
+        <!-- Daily Bonus Section -->
+        {% if not user.daily_bonus_given %}
+        <div class="daily-bonus-section">
+            <h3><i class="fas fa-gift"></i> Daily Bonus Available!</h3>
+            <p>Stay online and watch videos to earn your daily bonus</p>
+            <div class="bonus-timer" id="onlineTimer">
+                Time online: <span id="timeDisplay">{{ user.daily_online_time or 0 }}s</span> / {{ DAILY_ONLINE_TIME or 60 }}s
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="timeProgress" style="width: {{ ((user.daily_online_time or 0) / (DAILY_ONLINE_TIME or 60) * 100)|round(2) }}%"></div>
+            </div>
+            <button class="claim-bonus-btn" id="claimBonusBtn" 
+                    {% if (user.daily_online_time or 0) < (DAILY_ONLINE_TIME or 60) %}disabled{% endif %}>
+                <i class="fas fa-gift"></i> Claim ${{ DAILY_REWARD or 0.05 }} Bonus
+            </button>
+        </div>
+        {% endif %}
 
-                {% if user_videos %}
-                    {% for video in user_videos %}
-                    <div class="video-item">
-                        <div class="video-info">
-                            <h4>{{ video.title }}</h4>
-                            <div class="video-meta">
-                                <span><i class="fas fa-calendar"></i> {{ video.timestamp.strftime('%Y-%m-%d') }}</span>
-                                <span><i class="fas fa-clock"></i> {{ video.min_watch_time }}s watch time</span>
-                                <span><i class="fas fa-dollar-sign"></i> ${{ "%.3f"|format(video.reward_amount) }} reward</span>
-                                <span class="status-badge {% if video.is_active %}status-active{% else %}status-inactive{% endif %}">
-                                    {{ 'Active' if video.is_active else 'Inactive' }}
-                                </span>
-                            </div>
+        <div class="main-content">
+            <!-- Available Videos -->
+            <div class="videos-section">
+                <h2 class="section-title">
+                    <i class="fas fa-video"></i> Available Videos
+                    {% if not can_watch_more %}
+                        <span style="color: #ff4757; font-size: 0.8em;">(Daily limit reached)</span>
+                    {% endif %}
+                </h2>
+                
+                {% if videos %}
+                    {% for video in videos %}
+                    <div class="video-card">
+                        <div class="video-title">{{ video.title }}</div>
+                        <div class="video-meta">
+                            <span><i class="fas fa-clock"></i> {{ video.min_watch_time or 30 }}s minimum</span>
+                            <span><i class="fas fa-dollar-sign"></i> ${{ "%.3f"|format(video.reward_amount or 0.01) }}</span>
                         </div>
-                        <div class="video-actions">
-                            <button class="btn btn-success" onclick="toggleVideoStatus({{ video.id }}, {{ video.is_active|lower }})">
-                                <i class="fas fa-{% if video.is_active %}pause{% else %}play{% endif %}"></i>
-                                {{ 'Deactivate' if video.is_active else 'Activate' }}
-                            </button>
-                            <button class="btn btn-danger" onclick="deleteVideo({{ video.id }})">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                        <div class="video-meta">
+                            <small><i class="fas fa-user"></i> By: User {{ video.added_by }}</small>
+                            <small><i class="fas fa-calendar"></i> {{ video.timestamp.strftime('%m/%d/%Y') }}</small>
                         </div>
+                        {% if can_watch_more %}
+                            <a href="{{ url_for('watch_video', video_id=video.id) }}" class="watch-btn">
+                                <i class="fas fa-play"></i> Watch & Earn
+                            </a>
+                        {% else %}
+                            <button class="watch-btn" disabled>
+                                <i class="fas fa-ban"></i> Daily Limit Reached
+                            </button>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 {% else %}
                     <div class="no-videos">
-                        <i class="fas fa-video-slash"></i>
-                        <h3>No videos uploaded yet</h3>
-                        <p>Start by adding your first video to begin earning!</p>
+                        <i class="fas fa-video" style="font-size: 3rem; color: #ccc; margin-bottom: 1rem;"></i>
+                        <p>No videos available at the moment.</p>
+                        <p>Check back later for new earning opportunities!</p>
                     </div>
                 {% endif %}
             </div>
 
-            <!-- Quick Actions -->
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <i class="fas fa-bolt"></i>
-                        Quick Actions
-                    </h3>
-                </div>
-
-                <div class="quick-actions">
-                    <div class="action-card" onclick="openModal('addVideoModal')">
-                        <i class="fas fa-plus action-icon" style="color: #38a169;"></i>
-                        <div class="action-title">Add Video</div>
-                        <div class="action-desc">Upload new video</div>
-                    </div>
-                    <div class="action-card" onclick="viewAnalytics()">
-                        <i class="fas fa-chart-line action-icon" style="color: #3182ce;"></i>
-                        <div class="action-title">Analytics</div>
-                        <div class="action-desc">View performance</div>
-                    </div>
-                    <div class="action-card" onclick="manageRewards()">
-                        <i class="fas fa-coins action-icon" style="color: #d69e2e;"></i>
-                        <div class="action-title">Rewards</div>
-                        <div class="action-desc">Manage earnings</div>
-                    </div>
-                    <div class="action-card" onclick="viewSettings()">
-                        <i class="fas fa-cog action-icon" style="color: #666;"></i>
-                        <div class="action-title">Settings</div>
-                        <div class="action-desc">Video preferences</div>
-                    </div>
-                </div>
-
-                <!-- Recent Activity -->
-                <div style="margin-top: 30px;">
-                    <h4 style="margin-bottom: 15px; color: #4a5568;">
-                        <i class="fas fa-clock"></i>
-                        Recent Activity
-                    </h4>
-                    {% if recent_watches %}
-                        {% for watch in recent_watches %}
-                        <div class="alert alert-info">
-                            <strong>{{ watch.video.title }}</strong> was watched
-                            <br><small>{{ watch.start_time.strftime('%Y-%m-%d %H:%M') }}</small>
+            <!-- Recent Earnings -->
+            <div class="earnings-section">
+                <h2 class="section-title">
+                    <i class="fas fa-chart-line"></i> Recent Earnings
+                </h2>
+                
+                {% if earnings %}
+                    {% for earning in earnings %}
+                    <div class="earning-item">
+                        <div>
+                            <div class="earning-source">
+                                <i class="fas fa-{% if earning.source == 'watch' %}play{% elif earning.source == 'daily_bonus' %}gift{% else %}coins{% endif %}"></i>
+                                {{ earning.source.replace('_', ' ').title() }}
+                            </div>
+                            <div class="earning-time">{{ earning.timestamp.strftime('%m/%d %H:%M') }}</div>
                         </div>
-                        {% endfor %}
-                    {% else %}
-                        <p style="color: #666; text-align: center; padding: 20px;">
-                            No recent activity
-                        </p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Performance Chart -->
-        <div class="card" style="margin-bottom: 30px;">
-            <div class="card-header">
-                <h3 class="card-title">
-                    <i class="fas fa-chart-area"></i>
-                    Performance Overview
-                </h3>
-            </div>
-            <div class="chart-container">
-                <div style="text-align: center;">
-                    <i class="fas fa-chart-line" style="font-size: 3rem; color: #ccc; margin-bottom: 15px;"></i>
-                    <p>Analytics dashboard will be available soon</p>
-                </div>
+                        <div class="earning-amount">+${{ "%.3f"|format(earning.amount) }}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div style="text-align: center; padding: 2rem; color: #666;">
+                        <i class="fas fa-chart-line" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <p>No earnings yet.</p>
+                        <p>Start watching videos to earn!</p>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Add Video Modal -->
-    <div id="addVideoModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Video</h3>
-                <span class="close" onclick="closeModal('addVideoModal')">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form method="POST" action="{{ url_for('add_video') }}">
-                    {% if csrf_token %}
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    {% endif %}
-                    
-                    <div class="form-group">
-                        <label class="form-label">Video Title</label>
-                        <input type="text" name="title" class="form-control" required maxlength="200" 
-                               placeholder="Enter a catchy title for your video">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">YouTube Video URL</label>
-                        <input type="url" name="video_url" class="form-control" required 
-                               placeholder="https://www.youtube.com/watch?v=...">
-                        <small style="color: #666; font-size: 0.85rem;">
-                            Paste the full YouTube video URL
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Minimum Watch Time (seconds)</label>
-                        <input type="number" name="min_watch_time" class="form-control" 
-                               value="{{ VIDEO_WATCH_TIME }}" min="10" max="300">
-                        <small style="color: #666; font-size: 0.85rem;">
-                            Users must watch for at least this long to earn rewards
-                        </small>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Reward Amount ($)</label>
-                        <input type="number" name="reward_amount" class="form-control" 
-                               value="{{ VIDEO_REWARD_AMOUNT }}" min="0.001" max="1" step="0.001">
-                        <small style="color: #666; font-size: 0.85rem;">
-                            Amount users earn for watching this video
-                        </small>
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px;">
-                        <button type="button" class="btn" onclick="closeModal('addVideoModal')" 
-                                style="background: #e2e8f0; color: #4a5568;">
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-plus"></i>
-                            Add Video
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
+    <!-- CSRF Token for AJAX requests -->
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
     <script>
-        // Modal functionality
-        function openModal(modalId) {
-            document.getElementById(modalId).style.display = 'block';
-        }
+        // Session heartbeat and timer management
+        let onlineStartTime = Date.now();
+        let currentOnlineTime = {{ user.daily_online_time or 0 }};
+        const requiredTime = {{ DAILY_ONLINE_TIME or 60 }};
+        const sessionHeartbeatInterval = {{ SESSION_HEARTBEAT_INTERVAL or 5 }} * 1000;
+        
+        let focusLostCount = 0;
+        let windowFocused = true;
 
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
+        // Track window focus for anti-cheat
+        window.addEventListener('focus', function() {
+            windowFocused = true;
+        });
 
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                event.target.style.display = 'none';
+        window.addEventListener('blur', function() {
+            windowFocused = false;
+            focusLostCount++;
+        });
+
+        // Prevent back button (basic deterrent)
+        window.addEventListener('beforeunload', function(e) {
+            // Only warn if user is in middle of watching
+            if (window.location.pathname.includes('/watch_video/')) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+
+        // Update online timer display
+        function updateTimer() {
+            if (windowFocused) {
+                currentOnlineTime++;
+            }
+            
+            document.getElementById('timeDisplay').textContent = currentOnlineTime + 's';
+            
+            const progressPercent = Math.min((currentOnlineTime / requiredTime) * 100, 100);
+            document.getElementById('timeProgress').style.width = progressPercent + '%';
+            
+            // Enable bonus button when time is reached
+            const bonusBtn = document.getElementById('claimBonusBtn');
+            if (bonusBtn && currentOnlineTime >= requiredTime) {
+                bonusBtn.disabled = false;
             }
         }
 
-        // Video management functions
-        function toggleVideoStatus(videoId, currentStatus) {
-            if (confirm('Are you sure you want to ' + (currentStatus ? 'deactivate' : 'activate') + ' this video?')) {
-                fetch('/toggle_video_status', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        {% if csrf_token %}
-                        'X-CSRFToken': '{{ csrf_token() }}'
-                        {% endif %}
-                    },
-                    body: JSON.stringify({
-                        video_id: videoId,
-                        {% if csrf_token %}
-                        csrf_token: '{{ csrf_token() }}'
-                        {% endif %}
-                    })
+        // Send heartbeat to server
+        function sendHeartbeat() {
+            if (!windowFocused) return;
+            
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            
+            fetch('/api/heartbeat', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    type: 'daily',
+                    focus_lost: focusLostCount,
+                    online_time: currentOnlineTime
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while updating the video status.');
-                });
+            })
+            .catch(error => {
+                console.error('Heartbeat failed:', error);
+            });
+        }
+
+        // Claim daily bonus
+        function claimDailyBonus() {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const bonusBtn = document.getElementById('claimBonusBtn');
+            
+            bonusBtn.disabled = true;
+            bonusBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+            
+            fetch('/api/claim_daily_bonus', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success';
+                    alertDiv.innerHTML = `<i class="fas fa-check"></i> Daily bonus claimed! +$${data.bonus}`;
+                    document.querySelector('.container').insertBefore(alertDiv, document.querySelector('.stats-grid'));
+                    
+                    // Hide bonus section
+                    document.querySelector('.daily-bonus-section').style.display = 'none';
+                    
+                    // Update balance
+                    
+    const balanceElement = document.getElementById("userBalance");
+    const currentBalance = parseFloat(balanceElement.innerText.replace('$', ''));
+    const newBalance = currentBalance + data.bonus;
+
+    let start = currentBalance;
+    let end = newBalance;
+    let duration = 1500;
+    let startTime = null;
+
+    function animateBalance(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = timestamp - startTime;
+        const val = start + (end - start) * (progress / duration);
+        balanceElement.innerText = "$" + val.toFixed(2);
+        if (progress < duration) {
+            requestAnimationFrame(animateBalance);
+        } else {
+            balanceElement.innerText = "$" + end.toFixed(2);
+        }
+    }
+
+    requestAnimationFrame(animateBalance);
+    
+                } else {
+                    alert('Error: ' + data.error);
+                    bonusBtn.disabled = false;
+                    bonusBtn.innerHTML = '<i class="fas fa-gift"></i> Claim Bonus';
+                }
+            })
+            .catch(error => {
+                console.error('Bonus claim failed:', error);
+                alert('Failed to claim bonus. Please try again.');
+                bonusBtn.disabled = false;
+                bonusBtn.innerHTML = '<i class="fas fa-gift"></i> Claim Bonus';
+            });
+        }
+
+        // Hamburger menu toggle
+        function toggleHamburgerMenu() {
+            const dropdown = document.getElementById('hamburgerDropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close hamburger menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const hamburgerMenu = document.querySelector('.hamburger-menu');
+            const dropdown = document.getElementById('hamburgerDropdown');
+            
+            if (!hamburgerMenu.contains(event.target)) {
+                dropdown.classList.remove('show');
             }
-        }
+        });
 
-        function deleteVideo(videoId) {
-            if (confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
-                fetch('/delete_video', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        {% if csrf_token %}
-                        'X-CSRFToken': '{{ csrf_token() }}'
-                        {% endif %}
-                    },
-                    body: JSON.stringify({
-                        video_id: videoId,
-                        {% if csrf_token %}
-                        csrf_token: '{{ csrf_token() }}'
-                        {% endif %}
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        location.reload();
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('An error occurred while deleting the video.');
-                });
-            }
-        }
-
-        // Quick action functions
-        function viewAnalytics() {
-            alert('Analytics feature coming soon!');
-        }
-
-        function manageRewards() {
-            alert('Reward management feature coming soon!');
-        }
-
-        function viewSettings() {
-            alert('Settings feature coming soon!');
-        }
-
-        // Auto-refresh stats every 30 seconds
-        setInterval(function() {
-            // Optionally refresh stats without full page reload
-            // This could be implemented with AJAX calls
-        }, 30000);
-
-        // Initialize tooltips and other interactive elements
+        // Initialize timers and event listeners
         document.addEventListener('DOMContentLoaded', function() {
-            // Add any initialization code here
-            console.log('YouTuber Dashboard loaded successfully!');
+            // Update timer every second
+            if (document.getElementById('timeDisplay')) {
+                setInterval(updateTimer, 1000);
+            }
+            
+            // Send heartbeat regularly
+            setInterval(sendHeartbeat, sessionHeartbeatInterval);
+            
+            // Claim bonus button event
+            const bonusBtn = document.getElementById('claimBonusBtn');
+            if (bonusBtn) {
+                bonusBtn.addEventListener('click', claimDailyBonus);
+            }
+            
+            // Auto-hide alerts after 5 seconds
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.transition = 'opacity 0.5s';
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 500);
+                }, 5000);
+            });
         });
     </script>
+
+<script>
+function updateBalance(amount) {
+    const balanceEl = document.getElementById("userBalance");
+    if (!balanceEl) return;
+    let current = parseFloat(balanceEl.innerText);
+    let target = current + amount;
+    let start = null;
+
+    function animate(timestamp) {
+        if (!start) start = timestamp;
+        let progress = timestamp - start;
+        let increment = (amount / 500) * progress;
+        let newVal = current + increment;
+        if ((amount > 0 && newVal >= target) || (amount < 0 && newVal <= target)) {
+            balanceEl.innerText = target.toFixed(2);
+        } else {
+            balanceEl.innerText = newVal.toFixed(2);
+            requestAnimationFrame(animate);
+        }
+    }
+    requestAnimationFrame(animate);
+}
+
+function fetchLatestBalance() {
+    fetch('/api/user_stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.balance !== undefined) {
+                const balanceEl = document.getElementById("userBalance");
+                if (!balanceEl) return;
+                const current = parseFloat(balanceEl.innerText);
+                const updated = parseFloat(data.balance);
+                if (updated !== current) {
+                    updateBalance(updated - current);
+                }
+            }
+        })
+        .catch(err => console.error("Balance fetch error:", err));
+}
+
+// Initial call and repeat every 30 seconds
+window.addEventListener("DOMContentLoaded", () => {
+    fetchLatestBalance();
+    setInterval(fetchLatestBalance, 30000);
+});
+</script>
+
+
+<script>
+    function updateBalanceFromStats() {
+        fetch('/api/stats')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.balance !== undefined) {
+                    const balanceElement = document.getElementById("userBalance");
+                    balanceElement.innerText = "$" + parseFloat(data.balance).toFixed(2);
+                }
+            })
+            .catch(err => console.error("Auto-update balance failed:", err));
+    }
+
+    setInterval(updateBalanceFromStats, 30000);
+</script>
+
 </body>
 </html>
+
+<script>
+function animateCoinBalance(newBalance) {
+  const balanceElement = document.getElementById("userBalance");
+  if (!balanceElement) return;
+
+  const current = parseFloat(balanceElement.innerText.replace('$', '')) || 0;
+  const steps = 30;
+  let step = 0;
+  const increment = (newBalance - current) / steps;
+
+  function update() {
+    if (step < steps) {
+      step++;
+      balanceElement.innerText = "$" + (current + increment * step).toFixed(2);
+      requestAnimationFrame(update);
+    } else {
+      balanceElement.innerText = "$" + newBalance.toFixed(2);
+    }
+  }
+
+  update();
+}
+</script>
+
+
+
+<script>
+function animateCoinBalance(newBalance) {
+  const ids = ["userBalance", "userWalletBalance"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const current = parseFloat(el.innerText.replace('$', '')) || 0;
+    const steps = 30;
+    let step = 0;
+    const increment = (newBalance - current) / steps;
+
+    function update() {
+      if (step < steps) {
+        step++;
+        el.innerText = (current + increment * step).toFixed(2);
+        requestAnimationFrame(update);
+      } else {
+        el.innerText = newBalance.toFixed(2);
+      }
+    }
+
+    update();
+  });
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const claimButton = document.getElementById("claimBonusBtn");
+  if (claimButton) {
+    claimButton.addEventListener("click", function () {
+      claimButton.disabled = true;
+      fetch("/api/claim_daily_bonus", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && typeof data.new_balance === "number") {
+          animateCoinBalance(parseFloat(data.new_balance));
+          alert(data.message || "Bonus claimed!");
+        } else {
+          alert(data.error || "Failed to claim bonus.");
+        }
+      })
+      .catch(err => {
+        alert("Error claiming bonus.");
+        console.error(err);
+      })
+      .finally(() => {
+        claimButton.disabled = false;
+      });
+    });
+  }
+});
+</script>
