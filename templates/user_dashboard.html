@@ -397,9 +397,14 @@
                         </a>
                     </div>
                 </div>
-                <div class="logo">
+                
+    <div class="logo">
+        Balance: $<span id="userBalance">0.00</span>
+    </div>
+    <div class="logo">
                     <i class="fas fa-play-circle"></i> Watch & Earn
                 </div>
+    
             </div>
             <div class="user-info">
                 <div class="balance">
@@ -713,3 +718,24 @@
     </script>
 </body>
 </html>
+    <script>
+        function updateBalance(amount) {
+            const balanceEl = document.getElementById("userBalance");
+            if (!balanceEl) return;
+            const start = parseFloat(balanceEl.innerText) || 0;
+            const end = start + amount;
+            let current = start;
+            const increment = (end - start) / 40;
+            const step = () => {
+                current += increment;
+                if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+                    balanceEl.innerText = end.toFixed(2);
+                } else {
+                    balanceEl.innerText = current.toFixed(2);
+                    requestAnimationFrame(step);
+                }
+            };
+            step();
+        }
+    </script>
+    
