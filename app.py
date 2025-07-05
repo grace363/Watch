@@ -1196,26 +1196,11 @@ def user_dashboard():
                          can_watch_more=can_watch_more,
                          videos_remaining=videos_remaining,
                          time_until_daily_bonus=time_until_daily_bonus,
-                         # Add all missing template variables
                          MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
                          DAILY_ONLINE_TIME=DAILY_ONLINE_TIME,
                          DAILY_REWARD=DAILY_REWARD,
                          SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
                          VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
-                         MAX_VIDEOS_PER_DAY=MAX_VIDEOS_PER_DAY,
-                         DAILY_ONLINE_TIME=DAILY_ONLINE_TIME,
-                         DAILY_REWARD=DAILY_REWARD,
-                         SESSION_HEARTBEAT_INTERVAL=SESSION_HEARTBEAT_INTERVAL,
-                         VIDEO_REWARD_AMOUNT=VIDEO_REWARD_AMOUNT)
-
-# Configuration for file uploads - moved to environment variables
-UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads/videos')
-ALLOWED_EXTENSIONS = set(os.environ.get('ALLOWED_EXTENSIONS', 'mp4,avi,mov,wmv,flv,webm,mkv').split(','))
-MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', str(500 * 1024 * 1024)))  # Default 500MB
-VIDEO_WATCH_TIME = int(os.environ.get('VIDEO_WATCH_TIME', '30'))  # Default 30 seconds
-VIDEO_REWARD_AMOUNT = float(os.environ.get('VIDEO_REWARD_AMOUNT', '0.01'))  # Default $0.01
-DAILY_VIDEO_LIMIT = int(os.environ.get('DAILY_VIDEO_LIMIT', '50'))  # Default 50 videos per day
-MAX_FILE_SIZE_MB = int(os.environ.get('MAX_FILE_SIZE_MB', '500'))  # Default 500MB
 
 # Add to your app configuration
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
