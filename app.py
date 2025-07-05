@@ -890,7 +890,7 @@ def complete_video():
 def claim_daily_bonus():
     """Claim daily bonus if user stayed online for required time"""
     if 'user_id' not in session:
-        return jsonify({'error': 'Not logged in'}), 401
+        return jsonify(success=True, new_balance=user.balance_usd)
     
     try:
         user = User.query.get(session['user_id'])
