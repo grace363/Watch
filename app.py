@@ -1163,7 +1163,7 @@ def logout():
     session.clear()
     return redirect(url_for('home'))
 
-@app.route('/user_dashboard')
+@app.route('/user_dashboard', endpoint='user_dashboard')
 def user_dashboard():
     if 'user_id' not in session or session.get('account_type') != 'User':
         return redirect(url_for('login'))
