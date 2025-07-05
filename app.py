@@ -1572,3 +1572,16 @@ else:
     # For production deployment (like Render)
     # Initialize database when app is imported
     init_db()
+
+
+@app.route('/api/user_info')
+def user_info():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Not logged in'}), 401
+    user = User.query.get(session['user_id'])
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+    return jsonify({
+        'email': user.email,
+        'balance_usd': user.balance_usd
+    })
