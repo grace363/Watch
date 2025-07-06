@@ -17,6 +17,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 #==== Flask App Config ====
 
 app = Flask(__name__)
+
+from functools import wraps
+from flask import session, flash, redirect, url_for
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash("Access denied. Please log in.", "error")
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or not user.is_admin:
+            flash("Admin access required.", "error")
+            return redirect(url_for('user_dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', secrets.token_hex(32))
 
 #==== CSRF Protection ====
