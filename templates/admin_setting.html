@@ -1,0 +1,514 @@
+
+<div class="section">
+    <h2 class="section-title"><i class="fas fa-cogs"></i> Environment Variables</h2>
+    <form method="POST" action="{{ url_for('update_config') }}">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Current Value</th>
+                    <th colspan="2">Set Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+    <tr>
+        <td>DEBUG</td>
+        <td>{{ config_states.get('DEBUG', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="DEBUG" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('DEBUG') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('DEBUG') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>TESTING</td>
+        <td>{{ config_states.get('TESTING', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="TESTING" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('TESTING') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('TESTING') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>PROPAGATE_EXCEPTIONS</td>
+        <td>{{ config_states.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="PROPAGATE_EXCEPTIONS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('PROPAGATE_EXCEPTIONS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('PROPAGATE_EXCEPTIONS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SECRET_KEY</td>
+        <td>{{ config_states.get('SECRET_KEY', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SECRET_KEY" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SECRET_KEY') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SECRET_KEY') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>PERMANENT_SESSION_LIFETIME</td>
+        <td>{{ config_states.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="PERMANENT_SESSION_LIFETIME" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('PERMANENT_SESSION_LIFETIME') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('PERMANENT_SESSION_LIFETIME') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>USE_X_SENDFILE</td>
+        <td>{{ config_states.get('USE_X_SENDFILE', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="USE_X_SENDFILE" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('USE_X_SENDFILE') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('USE_X_SENDFILE') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SERVER_NAME</td>
+        <td>{{ config_states.get('SERVER_NAME', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SERVER_NAME" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SERVER_NAME') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SERVER_NAME') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>APPLICATION_ROOT</td>
+        <td>{{ config_states.get('APPLICATION_ROOT', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="APPLICATION_ROOT" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('APPLICATION_ROOT') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('APPLICATION_ROOT') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_COOKIE_NAME</td>
+        <td>{{ config_states.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_COOKIE_NAME" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_COOKIE_NAME') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_COOKIE_NAME') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_COOKIE_DOMAIN</td>
+        <td>{{ config_states.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_COOKIE_DOMAIN" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_COOKIE_DOMAIN') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_COOKIE_DOMAIN') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_COOKIE_PATH</td>
+        <td>{{ config_states.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_COOKIE_PATH" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_COOKIE_PATH') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_COOKIE_PATH') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_COOKIE_HTTPONLY</td>
+        <td>{{ config_states.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_COOKIE_HTTPONLY" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_COOKIE_HTTPONLY') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_COOKIE_HTTPONLY') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_COOKIE_SECURE</td>
+        <td>{{ config_states.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_COOKIE_SECURE" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_COOKIE_SECURE') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_COOKIE_SECURE') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_COOKIE_SAMESITE</td>
+        <td>{{ config_states.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_COOKIE_SAMESITE" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_COOKIE_SAMESITE') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_COOKIE_SAMESITE') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SESSION_REFRESH_EACH_REQUEST</td>
+        <td>{{ config_states.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SESSION_REFRESH_EACH_REQUEST" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SESSION_REFRESH_EACH_REQUEST') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SESSION_REFRESH_EACH_REQUEST') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAX_CONTENT_LENGTH</td>
+        <td>{{ config_states.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAX_CONTENT_LENGTH" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAX_CONTENT_LENGTH') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAX_CONTENT_LENGTH') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SEND_FILE_MAX_AGE_DEFAULT</td>
+        <td>{{ config_states.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SEND_FILE_MAX_AGE_DEFAULT" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SEND_FILE_MAX_AGE_DEFAULT') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SEND_FILE_MAX_AGE_DEFAULT') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>TRAP_BAD_REQUEST_ERRORS</td>
+        <td>{{ config_states.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="TRAP_BAD_REQUEST_ERRORS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('TRAP_BAD_REQUEST_ERRORS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('TRAP_BAD_REQUEST_ERRORS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>TRAP_HTTP_EXCEPTIONS</td>
+        <td>{{ config_states.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="TRAP_HTTP_EXCEPTIONS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('TRAP_HTTP_EXCEPTIONS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('TRAP_HTTP_EXCEPTIONS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>EXPLAIN_TEMPLATE_LOADING</td>
+        <td>{{ config_states.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="EXPLAIN_TEMPLATE_LOADING" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('EXPLAIN_TEMPLATE_LOADING') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('EXPLAIN_TEMPLATE_LOADING') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>PREFERRED_URL_SCHEME</td>
+        <td>{{ config_states.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="PREFERRED_URL_SCHEME" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('PREFERRED_URL_SCHEME') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('PREFERRED_URL_SCHEME') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>TEMPLATES_AUTO_RELOAD</td>
+        <td>{{ config_states.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="TEMPLATES_AUTO_RELOAD" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('TEMPLATES_AUTO_RELOAD') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('TEMPLATES_AUTO_RELOAD') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAX_COOKIE_SIZE</td>
+        <td>{{ config_states.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAX_COOKIE_SIZE" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAX_COOKIE_SIZE') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAX_COOKIE_SIZE') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_ENABLED</td>
+        <td>{{ config_states.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_ENABLED" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_ENABLED') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_ENABLED') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_CHECK_DEFAULT</td>
+        <td>{{ config_states.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_CHECK_DEFAULT" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_CHECK_DEFAULT') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_CHECK_DEFAULT') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_METHODS</td>
+        <td>{{ config_states.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_METHODS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_METHODS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_METHODS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_FIELD_NAME</td>
+        <td>{{ config_states.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_FIELD_NAME" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_FIELD_NAME') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_FIELD_NAME') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_HEADERS</td>
+        <td>{{ config_states.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_HEADERS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_HEADERS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_HEADERS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_TIME_LIMIT</td>
+        <td>{{ config_states.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_TIME_LIMIT" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_TIME_LIMIT') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_TIME_LIMIT') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>WTF_CSRF_SSL_STRICT</td>
+        <td>{{ config_states.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="WTF_CSRF_SSL_STRICT" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('WTF_CSRF_SSL_STRICT') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('WTF_CSRF_SSL_STRICT') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SQLALCHEMY_DATABASE_URI</td>
+        <td>{{ config_states.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SQLALCHEMY_DATABASE_URI" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SQLALCHEMY_DATABASE_URI') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SQLALCHEMY_DATABASE_URI') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
+        <td>{{ config_states.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SQLALCHEMY_TRACK_MODIFICATIONS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SQLALCHEMY_TRACK_MODIFICATIONS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SQLALCHEMY_TRACK_MODIFICATIONS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SQLALCHEMY_ENGINE_OPTIONS</td>
+        <td>{{ config_states.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SQLALCHEMY_ENGINE_OPTIONS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SQLALCHEMY_ENGINE_OPTIONS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SQLALCHEMY_ENGINE_OPTIONS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SQLALCHEMY_ECHO</td>
+        <td>{{ config_states.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SQLALCHEMY_ECHO" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SQLALCHEMY_ECHO') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SQLALCHEMY_ECHO') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SQLALCHEMY_BINDS</td>
+        <td>{{ config_states.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SQLALCHEMY_BINDS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SQLALCHEMY_BINDS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SQLALCHEMY_BINDS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>SQLALCHEMY_RECORD_QUERIES</td>
+        <td>{{ config_states.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="SQLALCHEMY_RECORD_QUERIES" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('SQLALCHEMY_RECORD_QUERIES') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('SQLALCHEMY_RECORD_QUERIES') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAIL_SERVER</td>
+        <td>{{ config_states.get('MAIL_SERVER', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAIL_SERVER" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAIL_SERVER') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAIL_SERVER') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAIL_PORT</td>
+        <td>{{ config_states.get('MAIL_PORT', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAIL_PORT" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAIL_PORT') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAIL_PORT') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAIL_USE_TLS</td>
+        <td>{{ config_states.get('MAIL_USE_TLS', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAIL_USE_TLS" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAIL_USE_TLS') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAIL_USE_TLS') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAIL_USERNAME</td>
+        <td>{{ config_states.get('MAIL_USERNAME', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAIL_USERNAME" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAIL_USERNAME') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAIL_USERNAME') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>MAIL_PASSWORD</td>
+        <td>{{ config_states.get('MAIL_PASSWORD', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="MAIL_PASSWORD" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('MAIL_PASSWORD') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('MAIL_PASSWORD') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>RATELIMIT_ENABLED</td>
+        <td>{{ config_states.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="RATELIMIT_ENABLED" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('RATELIMIT_ENABLED') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('RATELIMIT_ENABLED') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>RATELIMIT_STRATEGY</td>
+        <td>{{ config_states.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="RATELIMIT_STRATEGY" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('RATELIMIT_STRATEGY') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('RATELIMIT_STRATEGY') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>UPLOAD_FOLDER</td>
+        <td>{{ config_states.get('UPLOAD_FOLDER', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="UPLOAD_FOLDER" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('UPLOAD_FOLDER') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('UPLOAD_FOLDER') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+    <tr>
+        <td>REWARDS_ENABLED</td>
+        <td>{{ config_states.get('REWARDS_ENABLED', 'Not Set') }}</td>
+        <td colspan="2">
+            <select name="REWARDS_ENABLED" class="form-control">
+                <option value="">-- No Change --</option>
+                <option value="True" {% if config_states.get('REWARDS_ENABLED') == 'True' %}selected{% endif %}>True</option>
+                <option value="False" {% if config_states.get('REWARDS_ENABLED') == 'False' %}selected{% endif %}>False</option>
+            </select>
+        </td>
+    </tr>
+            </tbody>
+        </table>
+        <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">Update Settings</button>
+    </form>
+</div>
