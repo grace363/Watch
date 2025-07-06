@@ -1431,8 +1431,8 @@ def get_user_ip_history(user_id):
     
     return jsonify({'ip_logs': logs_data})
 
-@app.route('/upload_video', methods=['POST']) 
-def upload_video(): 
+@app.route('/youtuber/upload_video', methods=['POST']) 
+def youtuber_upload_video(): 
     if session.get('account_type') != 'YouTuber': 
         return jsonify({'error': 'Only YouTubers can upload videos'}), 403 
     
