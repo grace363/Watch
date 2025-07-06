@@ -1,1 +1,147 @@
-lang="en">
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Control Panel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+            color: #222;
+        }
+        h1, h2 {
+            color: #2c3e50;
+            margin-top: 40px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            background: white;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ccc;
+            vertical-align: top;
+        }
+        th {
+            background: #e9ecef;
+            text-align: left;
+        }
+        .boolean {
+            margin-left: 20px;
+        }
+        .boolean label {
+            margin-right: 15px;
+        }
+        input[type="text"], input[type="url"], input[type="file"], select {
+            width: 100%;
+            padding: 6px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .red-button {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Admin Control Panel</h1>
+
+<h2>🌐 Environment Variables Overview</h2>
+<table>
+    <tr><th>Variable</th><th>Current Value</th><th>Set True</th><th>Set False</th></tr>
+    {% for key, value in config_states.items() %}
+        <tr>
+            <td>{{ key }}</td>
+            <td>{{ value }}</td>
+            <td>
+                <input type="radio" name="{{ key }}" value="True" {% if value == 'True' %}checked{% endif %}>
+            </td>
+            <td>
+                <input type="radio" name="{{ key }}" value="False" {% if value == 'False' %}checked{% endif %}>
+            </td>
+        </tr>
+    {% endfor %}
+</table>
+<form method="POST" action="{{ url_for('update_config') }}">
+    {{ csrf_token() }}
+    <button type="submit">Update Environment Settings</button>
+</form>
+
+
+    <h2>🔧 System Settings</h2>
+    <table>
+        <tr><th>Key</th><th>Value</th></tr>
+        <tr><td>DEBUG</td><td>False <span class="boolean"><label><input type="radio" name="DEBUG" value="True">True</label><label><input type="radio" name="DEBUG" value="False" checked>False</label></span></td></tr>
+        <tr><td>TESTING</td><td>False <span class="boolean"><label><input type="radio" name="TESTING" value="True">True</label><label><input type="radio" name="TESTING" value="False" checked>False</label></span></td></tr>
+        <tr><td>SECRET_KEY</td><td><input type="text" value="70417347711657aeaf24b7bc70abc681" /></td></tr>
+        <tr><td>SQLALCHEMY_DATABASE_URI</td><td><input type="text" value="sqlite:///watch_and_earn.db" /></td></tr>
+        <tr><td>MAIL_USERNAME</td><td><input type="text" value="bensonmwangi834@gmail.com" /></td></tr>
+        <tr><td>MAIL_PASSWORD</td><td><input type="text" value="ytun ujjd kzfk qdgx" /></td></tr>
+    </table>
+
+    <button>Update Settings</button>
+
+    <h2>📺 Videos</h2>
+    <table>
+        <tr><th>ID</th><th>Title</th><th>Reward</th><th>Min Watch Time</th></tr>
+        <!-- Placeholder rows -->
+        <tr><td>1</td><td>Sample Video</td><td>$0.01</td><td>30s</td></tr>
+    </table>
+    <button class="red-button">Reset Everything to Default</button>
+
+    <h2>🔗 Upload YouTube Video</h2>
+    <form method="POST">
+        <label>Title: <input type="text" name="yt_title" /></label><br><br>
+        <label>YouTube URL: <input type="url" name="yt_url" /></label><br><br>
+        <label>Reward ($): <input type="text" name="yt_reward" /></label><br><br>
+        <label>Min Watch Time (sec): <input type="text" name="yt_watch_time" /></label><br><br>
+        <button>Upload YouTube Video</button>
+    </form>
+
+    <h2>📂 Upload Local Video File</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <label>Title: <input type="text" name="local_title" /></label><br><br>
+        <label>Select File: <input type="file" name="video_file" /></label><br><br>
+        <label>Reward ($): <input type="text" name="local_reward" /></label><br><br>
+        <label>Min Watch Time (sec): <input type="text" name="local_watch_time" /></label><br><br>
+        <button>Upload Video</button>
+    </form>
+
+    <h2>💸 Pending Payment Requests</h2>
+    <table>
+        <tr><th>User ID</th><th>Email</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+        <!-- Example -->
+        <tr><td>1</td><td>test@example.com</td><td>$5.00</td><td>Pending</td><td><button>Approve</button> <button class="red-button">Reject</button></td></tr>
+    </table>
+
+    <h2>📢 Sponsored Ads Upload</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <label>Title: <input type="text" name="ad_title" required /></label><br><br>
+        <label>Ad Type:
+            <select name="ad_type">
+                <option value="image">Image</option>
+                <option value="gif">GIF</option>
+                <option value="animation">Animation</option>
+                <option value="video">Video</option>
+            </select>
+        </label><br><br>
+        <label>File: <input type="file" name="ad_file" required /></label><br><br>
+        <label>Redirect URL: <input type="url" name="ad_url" /></label><br><br>
+        <button>Upload Sponsored Ad</button>
+    </form>
+
+</body>
+</html>
