@@ -47,6 +47,17 @@ else:
     csrf = None
     print("⚠️ CSRF Protection disabled")
 
+#app config
+app.config['REWARDS_ENABLED'] = os.environ.get('REWARDS_ENABLED', 'True') == 'True'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default_key')
+app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'uploads')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///watch_and_earn.db')
+app.config['DEBUG'] = os.environ.get('DEBUG', 'False') == 'True'
+app.config['TESTING'] = os.environ.get('TESTING', 'False') == 'True'
+ 
+
+
 #==== Database Configuration ====
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///watch_and_earn.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
@@ -64,6 +75,7 @@ MAINTENANCE_MODE = os.environ.get('MAINTENANCE_MODE', 'false').lower() == 'true'
 PASSWORD_MIN_LENGTH = int(os.environ.get('PASSWORD_MIN_LENGTH', 6)) 
 PASSWORD_CONFIRMATION_REQUIRED = os.environ.get('PASSWORD_CONFIRMATION_REQUIRED', 'true').lower() == 'true' 
 ALLOWED_ROLES = os.environ.get('ALLOWED_ROLES', 'User,YouTuber').split(',')
+
 
 # Watch & Earn Restrictive Rules
 VIDEO_WATCH_TIME = int(os.environ.get('VIDEO_WATCH_TIME', 30))  # Seconds to watch for reward
@@ -1701,3 +1713,23 @@ def update_config():
                 flash(f"Invalid value for {key}: {val}", "error")
     flash("Environment settings updated.", "success")
     return redirect(url_for('admin_panel'))
+
+@app.route('/admin/upload_sponsored', methods=['POST'])
+@csrf.exempt
+def upload_sponsored():
+    title = request.form.get('ad_title')
+    ad_type = request.form.get('ad_type')
+    ad_file = request.files.get('ad_file')
+    ad_url = request.form.get('ad_url')
+    if ad_file:
+        filename = secure_filename(ad_file.filename)
+        ad_file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        flash("Sponsored ad uploaded successfully.", "success")
+    return redirect(url_for('admin_panel'))
+
+
+
+@app.route('/admin/settings')
+def admin_settings():
+    config_states = {key: str(app.config.get(key, '')) for key in app.config}
+    return render_template('admin_settings.html', config_states=config_states)
