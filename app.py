@@ -890,7 +890,7 @@ def complete_video():
 def claim_daily_bonus():
     """Claim daily bonus if user stayed online for required time"""
     if 'user_id' not in session:
-        return jsonify(success=True, new_balance=user.balance_usd)
+        return jsonify({'error': 'Not logged in'}), 401
     
     try:
         user = User.query.get(session['user_id'])
@@ -1573,6 +1573,27 @@ else:
     # Initialize database when app is imported
     init_db()
 
-@app.route("/api/stats", methods=["GET"])
-def alias_user_stats():
-    return user_stats()
+@app.route("/admin/panel")
+@admin_required
+def admin_panel():
+    users = User.query.all()
+    videos = Video.query.all()
+    env_config = {
+        "DAILY_REWARD": DAILY_REWARD,
+        "DAILY_ONLINE_TIME": DAILY_ONLINE_TIME,
+        "MAX_VIDEOS_PER_DAY": MAX_VIDEOS_PER_DAY,
+        "SESSION_HEARTBEAT_INTERVAL": SESSION_HEARTBEAT_INTERVAL
+    }
+    return render_template("admin_panel.html", users=users, videos=videos, config=env_config)
+
+@app.route("/admin/reset_system", methods=["POST"])
+@admin_required
+def reset_system():
+    for user in User.query.all():
+        user.balance_usd = 0.0
+        user.videos_watched_today = 0
+        user.daily_bonus_given = False
+        user.daily_online_time = 0
+    db.session.commit()
+    flash("System has been reset to default.", "success")
+    return redirect(url_for("admin_panel"))
