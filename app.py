@@ -1584,7 +1584,8 @@ def admin_panel():
         "MAX_VIDEOS_PER_DAY": MAX_VIDEOS_PER_DAY,
         "SESSION_HEARTBEAT_INTERVAL": SESSION_HEARTBEAT_INTERVAL
     }
-    return render_template("admin_panel.html", users=users, videos=videos, config=env_config)
+    payment_requests = PaymentRequest.query.all()
+    return render_template("admin_panel.html", users=users, videos=videos, config=env_config, payment_requests=payment_requests)
 
 @app.route("/admin/reset_system", methods=["POST"])
 @admin_required
@@ -1597,3 +1598,107 @@ def reset_system():
     db.session.commit()
     flash("System has been reset to default.", "success")
     return redirect(url_for("admin_panel"))
+
+import os
+from werkzeug.utils import secure_filename
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'mp4', 'mov', 'avi', 'webm'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/admin/upload_youtube', methods=['POST'])
+@admin_required
+def upload_youtube():
+    title = request.form.get('title')
+    url = request.form.get('url')
+    reward = float(request.form.get('reward', 0))
+    watch_time = int(request.form.get('min_watch_time', 0))
+
+    if not title or not url:
+        flash("Missing title or URL", "error")
+        return redirect(url_for("admin_panel"))
+
+    new_video = Video(title=title, reward_amount=reward, min_watch_time=watch_time)
+    db.session.add(new_video)
+    db.session.commit()
+    flash("YouTube video added successfully.", "success")
+    return redirect(url_for("admin_panel"))
+
+@app.route('/admin/upload_video', methods=['POST'])
+@admin_required
+def upload_video():
+    if 'video_file' not in request.files:
+        flash("No video file uploaded", "error")
+        return redirect(url_for("admin_panel"))
+
+    file = request.files['video_file']
+    title = request.form.get('title')
+    reward = float(request.form.get('reward', 0))
+    watch_time = int(request.form.get('min_watch_time', 0))
+
+    if file.filename == '' or not allowed_file(file.filename):
+        flash("Invalid file type", "error")
+        return redirect(url_for("admin_panel"))
+
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    file.save(filepath)
+
+    new_video = Video(title=title or filename, reward_amount=reward, min_watch_time=watch_time)
+    db.session.add(new_video)
+    db.session.commit()
+
+    flash("Local video uploaded successfully.", "success")
+    return redirect(url_for("admin_panel"))
+
+class PaymentRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user = db.relationship('User', backref='payment_requests')
+    amount = db.Column(db.Float)
+    status = db.Column(db.String(20), default='pending')
+
+
+@app.route('/admin/approve_payment', methods=['POST'])
+@admin_required
+def approve_payment():
+    request_id = request.form.get('request_id')
+    req = PaymentRequest.query.get(request_id)
+    if req and req.status == 'pending':
+        req.status = 'approved'
+        db.session.commit()
+        flash('Payment approved.', 'success')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/reject_payment', methods=['POST'])
+@admin_required
+def reject_payment():
+    request_id = request.form.get('request_id')
+    req = PaymentRequest.query.get(request_id)
+    if req and req.status == 'pending':
+        req.status = 'rejected'
+        db.session.commit()
+        flash('Payment rejected.', 'info')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/update_config', methods=['POST'])
+@admin_required
+def update_config():
+    for key in ["DAILY_REWARD", "DAILY_ONLINE_TIME", "MAX_VIDEOS_PER_DAY", "SESSION_HEARTBEAT_INTERVAL"]:
+        val = request.form.get(key)
+        if val:
+            try:
+                if val.lower() in ['true', 'false']:
+                    app.config[key] = val.lower() == 'true'
+                elif '.' in val:
+                    app.config[key] = float(val)
+                else:
+                    app.config[key] = int(val)
+            except Exception as e:
+                flash(f"Invalid value for {key}: {val}", "error")
+    flash("Environment settings updated.", "success")
+    return redirect(url_for('admin_panel'))
