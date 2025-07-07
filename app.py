@@ -2664,6 +2664,21 @@ def admin_settings():
     config_states = {key: str(app.config.get(key, '')) for key in app.config}
     return render_template('admin_settings.html', config_states=config_states)
 
+
+@app.route('/admin/reset_user_password', methods=['POST'])
+@admin_required
+def reset_user_password():
+    user_id = request.form.get('user_id')
+    user = User.query.filter_by(id=user_id).first()
+    if user and not user.is_admin:
+        user.set_password("temp1234")
+        db.session.commit()
+        flash(f"Password for user {user.email} has been reset to 'temp1234'.", "success")
+    else:
+        flash("Invalid or admin user. Cannot reset.", "error")
+    return redirect(url_for('admin_panel'))
+
+
 if __name__ == '__main__':
     # Initialize database on startup
     init_db()
