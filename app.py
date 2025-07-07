@@ -52,6 +52,8 @@ app.config['REWARDS_ENABLED'] = os.environ.get('REWARDS_ENABLED', 'True') == 'Tr
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=31)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'default_key')
 app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'uploads')
+app.config['APP_NAME'] = os.environ.get('APP_NAME', 'Watch & Earn')
+
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///watch_and_earn.db')
 app.config['DEBUG'] = os.environ.get('DEBUG', 'False') == 'True'
 app.config['TESTING'] = os.environ.get('TESTING', 'False') == 'True'
@@ -1573,6 +1575,20 @@ def api_earnings():
         })
 
     return jsonify({'earnings': earnings_list})
+
+
+
+
+@app.route('/admin/update_app_name', methods=['POST'])
+@admin_required
+def update_app_name():
+    new_name = request.form.get('app_name', '').strip()
+    if new_name:
+        app.config['APP_NAME'] = new_name
+        flash('✅ App name updated successfully!', 'success')
+    else:
+        flash('⚠️ App name cannot be empty.', 'error')
+    return redirect(url_for('admin_panel'))
 
 
 if __name__ == '__main__':
