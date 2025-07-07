@@ -246,6 +246,9 @@ class User(db.Model):
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(50))
     phone = db.Column(db.String(20))
+    is_admin = db.Column(db.Boolean, default=False)
+
+
     
     # Anti-cheat fields
     videos_watched_today = db.Column(db.Integer, default=0)
@@ -520,12 +523,6 @@ The Watch & Earn Team
 
 
 from werkzeug.security import generate_password_hash, check_password_hash
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
