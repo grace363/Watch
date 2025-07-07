@@ -1,10 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Admin Dashboard - Watch & Earn</title>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-  <style>
+<meta charset="utf-8"/>
+<title>Admin Dashboard - Watch &amp; Earn</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet"/>
+<style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background: #f4f6f8;
@@ -72,2241 +73,2189 @@
   </style>
 </head>
 <body>
-
-<h1>⚙️ Admin Dashboard - Watch & Earn</h1>
-
+<h1>⚙️ Admin Dashboard - Watch &amp; Earn</h1>
 <div class="section">
-  <h2>📝 Rename App</h2>
-  <form method="POST" action="/admin/update_app_name">
-    <label>App Name:</label>
-    <input type="text" name="app_name" placeholder="Watch & Earn">
-    <button type="submit" class="btn">Update App Name</button>
-  </form>
+<h2>📝 Rename App</h2>
+<form action="/admin/update_app_name" method="POST">
+<label>App Name:</label>
+<input name="app_name" placeholder="Watch &amp; Earn" type="text"/>
+<button class="btn" type="submit">Update App Name</button>
+</form>
+</div>
+<div class="section">
+<h2>📢 Upload Sponsored Ad</h2>
+<form action="/admin/upload_sponsored" enctype="multipart/form-data" method="POST">
+<label>Ad Title (optional):</label>
+<input name="ad_title" type="text"/>
+<label>Ad Type:</label>
+<select name="ad_type">
+<option value="image">Image</option>
+<option value="gif">GIF</option>
+<option value="animation">Animation</option>
+<option value="video">Video</option>
+</select>
+<label>Ad File:</label>
+<input name="ad_file" required="" type="file"/>
+<label>Redirect URL (optional):</label>
+<input name="ad_url" type="url"/>
+<button class="btn" type="submit">Upload Sponsored Ad</button>
+</form>
+</div>
+<div class="section">
+<h2>🧪 Environment Configurations</h2>
+<div class="section">
+<h2>🧪 Environment Variables (Full List)</h2>
+</div>
 </div>
 
 <div class="section">
-  <h2>📢 Upload Sponsored Ad</h2>
-  <form method="POST" action="/admin/upload_sponsored" enctype="multipart/form-data">
-    <label>Ad Title (optional):</label>
-    <input type="text" name="ad_title">
-    <label>Ad Type:</label>
-    <select name="ad_type">
-      <option value="image">Image</option>
-      <option value="gif">GIF</option>
-      <option value="animation">Animation</option>
-      <option value="video">Video</option>
-    </select>
-    <label>Ad File:</label>
-    <input type="file" name="ad_file" required>
-    <label>Redirect URL (optional):</label>
-    <input type="url" name="ad_url">
-    <button type="submit" class="btn">Upload Sponsored Ad</button>
-  </form>
-</div>
-
-<div class="section">
-  <h2>🧪 Environment Configurations</h2>
-  
-<div class="section">
-  <h2>🧪 Environment Variables (Full List)</h2>
-  
-
-</div>
-
-</div>
-
-</div>
-
-<div class="section">
-  <h2>🧠 View All Users (w/ IP History)</h2>
-  <table>
-    <tr>
-      <th>ID</th><th>Email</th><th>Balance ($)</th><th>Banned</th><th>Admin</th><th>Actions</th>
-    </tr>
+<h2>🧠 View All Users (w/ IP History)</h2>
+<table>
+<tr>
+<th>ID</th><th>Email</th><th>Balance ($)</th><th>Banned</th><th>Admin</th><th>Actions</th>
+<th>Reset</th></tr>
     {% for user in users %}
     <tr>
-      <td>{{ user.id }}</td>
-      <td>{{ user.email }}</td>
-      <td>{{ "%.2f"|format(user.balance_usd) }}</td>
-      <td>{{ "Yes" if user.is_banned else "No" }}</td>
-      <td>{{ "Yes" if user.is_admin else "No" }}</td>
-      <td>
-        <a href="/admin/user-ips/{{ user.id }}">🔍 IPs</a>
-      </td>
-    </tr>
+<td>{{ user.id }}</td>
+<td>{{ user.email }}</td>
+<td>{{ "%.2f"|format(user.balance_usd) }}</td>
+<td>{{ "Yes" if user.is_banned else "No" }}</td>
+<td>{{ "Yes" if user.is_admin else "No" }}</td>
+<td>
+<a href="/admin/user-ips/{{ user.id }}">🔍 IPs</a>
+</td>
+<td>{% if not user.is_admin %}&lt;form method='POST' action='/admin/reset_user_password' style='display:inline;'&gt;&lt;input type='hidden' name='user_id' value='{{ user.id }}'&gt;&lt;button type='submit' style='background:#1e40af;color:white;border:none;padding:6px 12px;border-radius:5px;'&gt;Reset&lt;/button&gt;&lt;/form&gt;{% endif %}</td></tr>
     {% endfor %}
   </table>
 </div>
-
 <div class="section">
-  <h2>🧾 Payment Requests</h2>
-  <table>
-    <tr><th>User</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+<h2>🧾 Payment Requests</h2>
+<table>
+<tr><th>User</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
     {% for request in payment_requests %}
     <tr>
-      <td>{{ request.user.email }}</td>
-      <td>${{ "%.2f"|format(request.amount) }}</td>
-      <td>{{ request.status }}</td>
-      <td>
+<td>{{ request.user.email }}</td>
+<td>${{ "%.2f"|format(request.amount) }}</td>
+<td>{{ request.status }}</td>
+<td>
         {% if request.status == 'pending' %}
-        <form method="POST" action="/admin/approve_payment" style="display:inline;">
-          <input type="hidden" name="request_id" value="{{ request.id }}">
-          <button type="submit" class="btn">Approve</button>
-        </form>
-        <form method="POST" action="/admin/reject_payment" style="display:inline;">
-          <input type="hidden" name="request_id" value="{{ request.id }}">
-          <button type="submit" class="btn btn-danger">Reject</button>
-        </form>
+        <form action="/admin/approve_payment" method="POST" style="display:inline;">
+<input name="request_id" type="hidden" value="{{ request.id }}"/>
+<button class="btn" type="submit">Approve</button>
+</form>
+<form action="/admin/reject_payment" method="POST" style="display:inline;">
+<input name="request_id" type="hidden" value="{{ request.id }}"/>
+<button class="btn btn-danger" type="submit">Reject</button>
+</form>
         {% endif %}
       </td>
-    </tr>
+</tr>
     {% endfor %}
   </table>
 </div>
-
 <div class="section">
-  <h2>⚠️ Reset Everything</h2>
-  <form method="POST" action="/admin/reset_system" onsubmit="return confirm('Reset entire system?');">
-    <button type="submit" class="btn btn-danger">Reset to Default</button>
-  </form>
+<h2>⚠️ Reset Everything</h2>
+<form action="/admin/reset_system" method="POST" onsubmit="return confirm('Reset entire system?');">
+<button class="btn btn-danger" type="submit">Reset to Default</button>
+</form>
 </div>
-
-
 <div class="section">
-  <h2>📝 Rename App</h2>
-  <form method="POST" action="/admin/update_app_name">
-    <label>App Name:</label>
-    <input type="text" name="app_name" placeholder="Watch & Earn">
-    <button type="submit" class="btn">Update App Name</button>
-  </form>
+<h2>📝 Rename App</h2>
+<form action="/admin/update_app_name" method="POST">
+<label>App Name:</label>
+<input name="app_name" placeholder="Watch &amp; Earn" type="text"/>
+<button class="btn" type="submit">Update App Name</button>
+</form>
 </div>
-
 <div class="section">
-  <h2>📢 Upload Sponsored Ad</h2>
-  <form method="POST" action="/admin/upload_sponsored" enctype="multipart/form-data">
-    <label>Ad Title (optional):</label>
-    <input type="text" name="ad_title">
-    <label>Ad Type:</label>
-    <select name="ad_type">
-      <option value="image">Image</option>
-      <option value="gif">GIF</option>
-      <option value="animation">Animation</option>
-      <option value="video">Video</option>
-    </select>
-    <label>Ad File:</label>
-    <input type="file" name="ad_file" required>
-    <label>Redirect URL (optional):</label>
-    <input type="url" name="ad_url">
-    <button type="submit" class="btn">Upload Sponsored Ad</button>
-  </form>
+<h2>📢 Upload Sponsored Ad</h2>
+<form action="/admin/upload_sponsored" enctype="multipart/form-data" method="POST">
+<label>Ad Title (optional):</label>
+<input name="ad_title" type="text"/>
+<label>Ad Type:</label>
+<select name="ad_type">
+<option value="image">Image</option>
+<option value="gif">GIF</option>
+<option value="animation">Animation</option>
+<option value="video">Video</option>
+</select>
+<label>Ad File:</label>
+<input name="ad_file" required="" type="file"/>
+<label>Redirect URL (optional):</label>
+<input name="ad_url" type="url"/>
+<button class="btn" type="submit">Upload Sponsored Ad</button>
+</form>
 </div>
-
 <div class="section">
-  <h2>🧪 Environment Configurations</h2>
-  
+<h2>🧪 Environment Configurations</h2>
 <div class="section">
-  <h2>🧪 Environment Variables (Full List)</h2>
-  
-
+<h2>🧪 Environment Variables (Full List)</h2>
 </div>
-
-</div>
-
 </div>
 
 <div class="section">
-  <h2>🧠 View All Users (w/ IP History)</h2>
-  <table>
-    <tr>
-      <th>ID</th><th>Email</th><th>Balance ($)</th><th>Banned</th><th>Admin</th><th>Actions</th>
-    </tr>
+<h2>🧠 View All Users (w/ IP History)</h2>
+<table>
+<tr>
+<th>ID</th><th>Email</th><th>Balance ($)</th><th>Banned</th><th>Admin</th><th>Actions</th>
+</tr>
     {% for user in users %}
     <tr>
-      <td>{{ user.id }}</td>
-      <td>{{ user.email }}</td>
-      <td>{{ "%.2f"|format(user.balance_usd) }}</td>
-      <td>{{ "Yes" if user.is_banned else "No" }}</td>
-      <td>{{ "Yes" if user.is_admin else "No" }}</td>
-      <td>
-        <a href="/admin/user-ips/{{ user.id }}">🔍 IPs</a>
-      </td>
-    </tr>
+<td>{{ user.id }}</td>
+<td>{{ user.email }}</td>
+<td>{{ "%.2f"|format(user.balance_usd) }}</td>
+<td>{{ "Yes" if user.is_banned else "No" }}</td>
+<td>{{ "Yes" if user.is_admin else "No" }}</td>
+<td>
+<a href="/admin/user-ips/{{ user.id }}">🔍 IPs</a>
+</td>
+</tr>
     {% endfor %}
   </table>
 </div>
-
 <div class="section">
-  <h2>🧾 Payment Requests</h2>
-  <table>
-    <tr><th>User</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+<h2>🧾 Payment Requests</h2>
+<table>
+<tr><th>User</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
     {% for request in payment_requests %}
     <tr>
-      <td>{{ request.user.email }}</td>
-      <td>${{ "%.2f"|format(request.amount) }}</td>
-      <td>{{ request.status }}</td>
-      <td>
+<td>{{ request.user.email }}</td>
+<td>${{ "%.2f"|format(request.amount) }}</td>
+<td>{{ request.status }}</td>
+<td>
         {% if request.status == 'pending' %}
-        <form method="POST" action="/admin/approve_payment" style="display:inline;">
-          <input type="hidden" name="request_id" value="{{ request.id }}">
-          <button type="submit" class="btn">Approve</button>
-        </form>
-        <form method="POST" action="/admin/reject_payment" style="display:inline;">
-          <input type="hidden" name="request_id" value="{{ request.id }}">
-          <button type="submit" class="btn btn-danger">Reject</button>
-        </form>
+        <form action="/admin/approve_payment" method="POST" style="display:inline;">
+<input name="request_id" type="hidden" value="{{ request.id }}"/>
+<button class="btn" type="submit">Approve</button>
+</form>
+<form action="/admin/reject_payment" method="POST" style="display:inline;">
+<input name="request_id" type="hidden" value="{{ request.id }}"/>
+<button class="btn btn-danger" type="submit">Reject</button>
+</form>
         {% endif %}
       </td>
-    </tr>
+</tr>
     {% endfor %}
   </table>
 </div>
-
 <div class="section">
-  <h2>⚠️ Reset Everything</h2>
-  <form method="POST" action="/admin/reset_system" onsubmit="return confirm('Reset entire system?');">
-    <button type="submit" class="btn btn-danger">Reset to Default</button>
-  </form>
+<h2>⚠️ Reset Everything</h2>
+<form action="/admin/reset_system" method="POST" onsubmit="return confirm('Reset entire system?');">
+<button class="btn btn-danger" type="submit">Reset to Default</button>
+</form>
 </div>
-
 <div class="section">
-  <h2>🧪 Full Environment Variables</h2>
-  <form method="POST" action="/admin/update_config">
-    <table>
-      <tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
-      
-        <tr>
-            <td>DEBUG</td>
-            <td>{{ config.get('DEBUG', 'Not Set') }}</td>
-            <td>
-                <select name="DEBUG">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('DEBUG') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('DEBUG') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TESTING</td>
-            <td>{{ config.get('TESTING', 'Not Set') }}</td>
-            <td>
-                <select name="TESTING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TESTING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TESTING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PROPAGATE_EXCEPTIONS</td>
-            <td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PROPAGATE_EXCEPTIONS" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SECRET_KEY</td>
-            <td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SECRET_KEY" value="{{ config.get('SECRET_KEY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>PERMANENT_SESSION_LIFETIME</td>
-            <td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PERMANENT_SESSION_LIFETIME" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>USE_X_SENDFILE</td>
-            <td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
-            <td>
-                <select name="USE_X_SENDFILE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('USE_X_SENDFILE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('USE_X_SENDFILE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SERVER_NAME</td>
-            <td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SERVER_NAME" value="{{ config.get('SERVER_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>APPLICATION_ROOT</td>
-            <td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="APPLICATION_ROOT" value="{{ config.get('APPLICATION_ROOT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_NAME</td>
-            <td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_NAME" value="{{ config.get('SESSION_COOKIE_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_DOMAIN</td>
-            <td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_DOMAIN" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_PATH</td>
-            <td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_PATH" value="{{ config.get('SESSION_COOKIE_PATH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_HTTPONLY</td>
-            <td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_HTTPONLY">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SECURE</td>
-            <td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_SECURE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_SECURE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_SECURE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SAMESITE</td>
-            <td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_SAMESITE" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_REFRESH_EACH_REQUEST</td>
-            <td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_REFRESH_EACH_REQUEST">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_CONTENT_LENGTH</td>
-            <td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_CONTENT_LENGTH" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SEND_FILE_MAX_AGE_DEFAULT</td>
-            <td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SEND_FILE_MAX_AGE_DEFAULT" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_BAD_REQUEST_ERRORS</td>
-            <td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_BAD_REQUEST_ERRORS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_HTTP_EXCEPTIONS</td>
-            <td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_HTTP_EXCEPTIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>EXPLAIN_TEMPLATE_LOADING</td>
-            <td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
-            <td>
-                <select name="EXPLAIN_TEMPLATE_LOADING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PREFERRED_URL_SCHEME</td>
-            <td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PREFERRED_URL_SCHEME" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TEMPLATES_AUTO_RELOAD</td>
-            <td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="TEMPLATES_AUTO_RELOAD" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_COOKIE_SIZE</td>
-            <td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_COOKIE_SIZE" value="{{ config.get('MAX_COOKIE_SIZE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_ENABLED</td>
-            <td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_CHECK_DEFAULT</td>
-            <td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_CHECK_DEFAULT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_METHODS</td>
-            <td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_METHODS" value="{{ config.get('WTF_CSRF_METHODS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_FIELD_NAME</td>
-            <td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_FIELD_NAME" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_HEADERS</td>
-            <td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_HEADERS" value="{{ config.get('WTF_CSRF_HEADERS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_TIME_LIMIT</td>
-            <td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_TIME_LIMIT" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_SSL_STRICT</td>
-            <td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_SSL_STRICT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_SSL_STRICT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_SSL_STRICT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_DATABASE_URI</td>
-            <td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_DATABASE_URI" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
-            <td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_TRACK_MODIFICATIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ENGINE_OPTIONS</td>
-            <td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_ENGINE_OPTIONS" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ECHO</td>
-            <td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_ECHO">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_ECHO') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_ECHO') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_BINDS</td>
-            <td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_BINDS" value="{{ config.get('SQLALCHEMY_BINDS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_RECORD_QUERIES</td>
-            <td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_RECORD_QUERIES">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_SERVER</td>
-            <td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_SERVER" value="{{ config.get('MAIL_SERVER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PORT</td>
-            <td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PORT" value="{{ config.get('MAIL_PORT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USE_TLS</td>
-            <td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
-            <td>
-                <select name="MAIL_USE_TLS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAIL_USE_TLS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAIL_USE_TLS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USERNAME</td>
-            <td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_USERNAME" value="{{ config.get('MAIL_USERNAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PASSWORD</td>
-            <td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PASSWORD" value="{{ config.get('MAIL_PASSWORD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_ENABLED</td>
-            <td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_ENABLED" value="{{ config.get('RATELIMIT_ENABLED', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_STRATEGY</td>
-            <td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_STRATEGY" value="{{ config.get('RATELIMIT_STRATEGY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>UPLOAD_FOLDER</td>
-            <td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="UPLOAD_FOLDER" value="{{ config.get('UPLOAD_FOLDER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>REWARDS_ENABLED</td>
-            <td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="REWARDS_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('REWARDS_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('REWARDS_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAINTENANCE_MODE</td>
-            <td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
-            <td>
-                <select name="MAINTENANCE_MODE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAINTENANCE_MODE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAINTENANCE_MODE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>ENABLE_IP_TRACKING</td>
-            <td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
-            <td>
-                <select name="ENABLE_IP_TRACKING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('ENABLE_IP_TRACKING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('ENABLE_IP_TRACKING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>AUTO_LOGIN_AFTER_REGISTRATION</td>
-            <td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
-            <td>
-                <select name="AUTO_LOGIN_AFTER_REGISTRATION">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PASSWORD_MIN_LENGTH</td>
-            <td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PASSWORD_MIN_LENGTH" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>DAILY_LOGIN_REWARD</td>
-            <td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="DAILY_LOGIN_REWARD" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_REWARD_AMOUNT</td>
-            <td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_REWARD_AMOUNT" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_WATCH_TIME</td>
-            <td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_WATCH_TIME" value="{{ config.get('VIDEO_WATCH_TIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>ANTI_CHEAT_TOLERANCE</td>
-            <td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="ANTI_CHEAT_TOLERANCE" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_IP_HISTORY</td>
-            <td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_IP_HISTORY" value="{{ config.get('MAX_IP_HISTORY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MIN_WITHDRAW_AMOUNT</td>
-            <td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MIN_WITHDRAW_AMOUNT" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}">
-            </td>
-        </tr>
-    </table>
-    <br>
-    <button type="submit" class="btn">Save Environment Settings</button>
-  </form>
+<h2>🧪 Full Environment Variables</h2>
+<form action="/admin/update_config" method="POST">
+<table>
+<tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
+<tr>
+<td>DEBUG</td>
+<td>{{ config.get('DEBUG', 'Not Set') }}</td>
+<td>
+<select name="DEBUG">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('debug')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('debug')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TESTING</td>
+<td>{{ config.get('TESTING', 'Not Set') }}</td>
+<td>
+<select name="TESTING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('testing')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('testing')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PROPAGATE_EXCEPTIONS</td>
+<td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<input name="PROPAGATE_EXCEPTIONS" type="text" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SECRET_KEY</td>
+<td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
+<td>
+<input name="SECRET_KEY" type="text" value="{{ config.get('SECRET_KEY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>PERMANENT_SESSION_LIFETIME</td>
+<td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
+<td>
+<input name="PERMANENT_SESSION_LIFETIME" type="text" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>USE_X_SENDFILE</td>
+<td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
+<td>
+<select name="USE_X_SENDFILE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('use_x_sendfile')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('use_x_sendfile')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SERVER_NAME</td>
+<td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
+<td>
+<input name="SERVER_NAME" type="text" value="{{ config.get('SERVER_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>APPLICATION_ROOT</td>
+<td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
+<td>
+<input name="APPLICATION_ROOT" type="text" value="{{ config.get('APPLICATION_ROOT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_NAME</td>
+<td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_NAME" type="text" value="{{ config.get('SESSION_COOKIE_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_DOMAIN</td>
+<td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_DOMAIN" type="text" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_PATH</td>
+<td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_PATH" type="text" value="{{ config.get('SESSION_COOKIE_PATH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_HTTPONLY</td>
+<td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_HTTPONLY">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_httponly')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_httponly')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SECURE</td>
+<td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_SECURE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_secure')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_secure')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SAMESITE</td>
+<td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_SAMESITE" type="text" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_REFRESH_EACH_REQUEST</td>
+<td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
+<td>
+<select name="SESSION_REFRESH_EACH_REQUEST">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_refresh_each_request')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_refresh_each_request')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAX_CONTENT_LENGTH</td>
+<td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="MAX_CONTENT_LENGTH" type="text" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SEND_FILE_MAX_AGE_DEFAULT</td>
+<td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
+<td>
+<input name="SEND_FILE_MAX_AGE_DEFAULT" type="text" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TRAP_BAD_REQUEST_ERRORS</td>
+<td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_BAD_REQUEST_ERRORS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_bad_request_errors')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_bad_request_errors')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TRAP_HTTP_EXCEPTIONS</td>
+<td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_HTTP_EXCEPTIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_http_exceptions')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_http_exceptions')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>EXPLAIN_TEMPLATE_LOADING</td>
+<td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
+<td>
+<select name="EXPLAIN_TEMPLATE_LOADING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('explain_template_loading')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('explain_template_loading')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PREFERRED_URL_SCHEME</td>
+<td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
+<td>
+<input name="PREFERRED_URL_SCHEME" type="text" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TEMPLATES_AUTO_RELOAD</td>
+<td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
+<td>
+<input name="TEMPLATES_AUTO_RELOAD" type="text" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_COOKIE_SIZE</td>
+<td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
+<td>
+<input name="MAX_COOKIE_SIZE" type="text" value="{{ config.get('MAX_COOKIE_SIZE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_ENABLED</td>
+<td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_CHECK_DEFAULT</td>
+<td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_CHECK_DEFAULT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_check_default')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_check_default')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_METHODS</td>
+<td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_METHODS" type="text" value="{{ config.get('WTF_CSRF_METHODS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_FIELD_NAME</td>
+<td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_FIELD_NAME" type="text" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_HEADERS</td>
+<td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_HEADERS" type="text" value="{{ config.get('WTF_CSRF_HEADERS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_TIME_LIMIT</td>
+<td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_TIME_LIMIT" type="text" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_SSL_STRICT</td>
+<td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_SSL_STRICT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_ssl_strict')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_ssl_strict')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_DATABASE_URI</td>
+<td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_DATABASE_URI" type="text" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
+<td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_TRACK_MODIFICATIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_track_modifications')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_track_modifications')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ENGINE_OPTIONS</td>
+<td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_ENGINE_OPTIONS" type="text" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ECHO</td>
+<td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_ECHO">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_echo')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_echo')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_BINDS</td>
+<td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_BINDS" type="text" value="{{ config.get('SQLALCHEMY_BINDS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_RECORD_QUERIES</td>
+<td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_RECORD_QUERIES">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_record_queries')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_record_queries')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_SERVER</td>
+<td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
+<td>
+<input name="MAIL_SERVER" type="text" value="{{ config.get('MAIL_SERVER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PORT</td>
+<td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PORT" type="text" value="{{ config.get('MAIL_PORT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_USE_TLS</td>
+<td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
+<td>
+<select name="MAIL_USE_TLS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('mail_use_tls')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('mail_use_tls')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_USERNAME</td>
+<td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
+<td>
+<input name="MAIL_USERNAME" type="text" value="{{ config.get('MAIL_USERNAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PASSWORD</td>
+<td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PASSWORD" type="text" value="{{ config.get('MAIL_PASSWORD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_ENABLED</td>
+<td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_ENABLED" type="text" value="{{ config.get('RATELIMIT_ENABLED', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_STRATEGY</td>
+<td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_STRATEGY" type="text" value="{{ config.get('RATELIMIT_STRATEGY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>UPLOAD_FOLDER</td>
+<td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
+<td>
+<input name="UPLOAD_FOLDER" type="text" value="{{ config.get('UPLOAD_FOLDER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>REWARDS_ENABLED</td>
+<td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="REWARDS_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('rewards_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('rewards_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAINTENANCE_MODE</td>
+<td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
+<td>
+<select name="MAINTENANCE_MODE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('maintenance_mode')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('maintenance_mode')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>ENABLE_IP_TRACKING</td>
+<td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
+<td>
+<select name="ENABLE_IP_TRACKING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('enable_ip_tracking')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('enable_ip_tracking')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>AUTO_LOGIN_AFTER_REGISTRATION</td>
+<td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
+<td>
+<select name="AUTO_LOGIN_AFTER_REGISTRATION">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('auto_login_after_registration')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('auto_login_after_registration')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PASSWORD_MIN_LENGTH</td>
+<td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="PASSWORD_MIN_LENGTH" type="text" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>DAILY_LOGIN_REWARD</td>
+<td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
+<td>
+<input name="DAILY_LOGIN_REWARD" type="text" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_REWARD_AMOUNT</td>
+<td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_REWARD_AMOUNT" type="text" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_WATCH_TIME</td>
+<td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_WATCH_TIME" type="text" value="{{ config.get('VIDEO_WATCH_TIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>ANTI_CHEAT_TOLERANCE</td>
+<td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
+<td>
+<input name="ANTI_CHEAT_TOLERANCE" type="text" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_IP_HISTORY</td>
+<td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
+<td>
+<input name="MAX_IP_HISTORY" type="text" value="{{ config.get('MAX_IP_HISTORY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MIN_WITHDRAW_AMOUNT</td>
+<td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="MIN_WITHDRAW_AMOUNT" type="text" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}"/>
+</td>
+</tr>
+</table>
+<br/>
+<button class="btn" type="submit">Save Environment Settings</button>
+</form>
 <div class="section">
-  <h2>👤 User Management</h2>
-  <div class="sub-section">
-    <label>Search User by Email or ID:</label>
-    <input type="text" placeholder="Enter email or user ID" />
-    <button class="btn">Search</button>
-
-    <label>Modify User Balance ($):</label>
-    <input type="number" placeholder="New balance amount">
-    <button class="btn">Update Balance</button>
-
-    <label>Reset Password / Unlock Account</label>
-    <input type="email" placeholder="User email">
-    <button class="btn">Reset Password</button>
-
-    <label>Ban or Suspend User</label>
-    <select>
-      <option value="ban">Ban</option>
-      <option value="suspend">Suspend</option>
-      <option value="unban">Unban</option>
-    </select>
-    <button class="btn btn-danger">Apply</button>
-  </div>
+<h2>👤 User Management</h2>
+<div class="sub-section">
+<label>Search User by Email or ID:</label>
+<input placeholder="Enter email or user ID" type="text">
+<button class="btn">Search</button>
+<label>Modify User Balance ($):</label>
+<input placeholder="New balance amount" type="number"/>
+<button class="btn">Update Balance</button>
+<label>Reset Password / Unlock Account</label>
+<input placeholder="User email" type="email"/>
+<button class="btn">Reset Password</button>
+<label>Ban or Suspend User</label>
+<select>
+<option value="ban">Ban</option>
+<option value="suspend">Suspend</option>
+<option value="unban">Unban</option>
+</select>
+<button class="btn btn-danger">Apply</button>
+</input></div>
 </div>
-
 <div class="section">
-  <h2>📂 KYC & Verification</h2>
-  <div class="sub-section">
-    <label>Search Pending Verifications</label>
-    <input type="text" placeholder="User email or ID" />
-    <button class="btn">Review</button>
-    <label>Approve / Reject KYC</label>
-    <select>
-      <option>Approve</option>
-      <option>Reject</option>
-    </select>
-    <button class="btn">Submit</button>
-  </div>
+<h2>📂 KYC &amp; Verification</h2>
+<div class="sub-section">
+<label>Search Pending Verifications</label>
+<input placeholder="User email or ID" type="text">
+<button class="btn">Review</button>
+<label>Approve / Reject KYC</label>
+<select>
+<option>Approve</option>
+<option>Reject</option>
+</select>
+<button class="btn">Submit</button>
+</input></div>
 </div>
-
 <div class="section">
-  <h2>🎥 Content Management</h2>
-  <div class="sub-section">
-    <label>Upload / Edit Video Content</label>
-    <input type="text" placeholder="Title">
-    <input type="file" />
-    <button class="btn">Upload Video</button>
-
-    <label>Set Category / Tags</label>
-    <input type="text" placeholder="e.g. Education, Entertainment">
-    <button class="btn">Assign</button>
-
-    <label>Schedule or Set Visibility</label>
-    <input type="datetime-local" />
-    <select><option>Public</option><option>Private</option></select>
-    <button class="btn">Update</button>
-  </div>
+<h2>🎥 Content Management</h2>
+<div class="sub-section">
+<label>Upload / Edit Video Content</label>
+<input placeholder="Title" type="text"/>
+<input type="file">
+<button class="btn">Upload Video</button>
+<label>Set Category / Tags</label>
+<input placeholder="e.g. Education, Entertainment" type="text"/>
+<button class="btn">Assign</button>
+<label>Schedule or Set Visibility</label>
+<input type="datetime-local">
+<select><option>Public</option><option>Private</option></select>
+<button class="btn">Update</button>
+</input></input></div>
 </div>
-
 <div class="section">
-  <h2>💰 Financial Controls</h2>
-  <div class="sub-section">
-    <label>Minimum Withdrawal ($)</label>
-    <input type="number" value="5">
-    <label>Adjust Global Earning Rate ($ per video)</label>
-    <input type="number" step="0.01">
-    <label>Payment Method</label>
-    <input type="text" placeholder="e.g. PayPal, Mpesa">
-    <button class="btn">Save Financial Settings</button>
-  </div>
+<h2>💰 Financial Controls</h2>
+<div class="sub-section">
+<label>Minimum Withdrawal ($)</label>
+<input type="number" value="5"/>
+<label>Adjust Global Earning Rate ($ per video)</label>
+<input step="0.01" type="number"/>
+<label>Payment Method</label>
+<input placeholder="e.g. PayPal, Mpesa" type="text"/>
+<button class="btn">Save Financial Settings</button>
 </div>
-
-<div class="section">
-  <h2>🧪 System Settings</h2>
-  <div class="sub-section">
-    <label>Enable Maintenance Mode</label>
-    <select>
-      <option value="False">OFF</option>
-      <option value="True">ON</option>
-    </select>
-
-    <label>Referral Bonus (%)</label>
-    <input type="number" value="10">
-
-    <label>Daily Earning Limit ($)</label>
-    <input type="number" value="1.00">
-
-    <label>Enable Fraud Detection</label>
-    <select><option>True</option><option>False</option></select>
-
-    <button class="btn">Update Settings</button>
-  </div>
 </div>
-
 <div class="section">
-  <h2>📈 Analytics & Reporting</h2>
-  <div class="sub-section">
-    <button class="btn">View Dashboard</button>
-    <button class="btn">Export Financial Report</button>
-    <button class="btn">System Logs</button>
-  </div>
+<h2>🧪 System Settings</h2>
+<div class="sub-section">
+<label>Enable Maintenance Mode</label>
+<select>
+<option value="False">OFF</option>
+<option value="True">ON</option>
+</select>
+<label>Referral Bonus (%)</label>
+<input type="number" value="10"/>
+<label>Daily Earning Limit ($)</label>
+<input type="number" value="1.00"/>
+<label>Enable Fraud Detection</label>
+<select><option>True</option><option>False</option></select>
+<button class="btn">Update Settings</button>
 </div>
-
-<div class="section">
-  <h2>🔐 Security & Compliance</h2>
-  <div class="sub-section">
-    <label>Admin Roles</label>
-    <select><option>Super Admin</option><option>Finance Admin</option></select>
-    <button class="btn">Assign Role</button>
-
-    <label>Request Backup / Recovery</label>
-    <button class="btn">Generate Backup</button>
-
-    <label>View Audit Log</label>
-    <button class="btn">Open Logs</button>
-  </div>
 </div>
-
 <div class="section">
-  <h2>📣 Communication & Support</h2>
-  <div class="sub-section">
-    <label>Send Notification</label>
-    <textarea rows="4" placeholder="Type your message..."></textarea>
-    <button class="btn">Send Notification</button>
-
-    <label>Manage Support Tickets</label>
-    <button class="btn">Open Support Console</button>
-
-    <label>Schedule Promo Campaign</label>
-    <input type="text" placeholder="Campaign title">
-    <button class="btn">Schedule</button>
-  </div>
+<h2>📈 Analytics &amp; Reporting</h2>
+<div class="sub-section">
+<button class="btn">View Dashboard</button>
+<button class="btn">Export Financial Report</button>
+<button class="btn">System Logs</button>
 </div>
-
+</div>
 <div class="section">
-  <h2>🧪 Full Environment Variables</h2>
-  <form method="POST" action="/admin/update_config">
-    <table>
-      <tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
-      
-        <tr>
-            <td>DEBUG</td>
-            <td>{{ config.get('DEBUG', 'Not Set') }}</td>
-            <td>
-                <select name="DEBUG">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('DEBUG') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('DEBUG') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TESTING</td>
-            <td>{{ config.get('TESTING', 'Not Set') }}</td>
-            <td>
-                <select name="TESTING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TESTING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TESTING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PROPAGATE_EXCEPTIONS</td>
-            <td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PROPAGATE_EXCEPTIONS" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SECRET_KEY</td>
-            <td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SECRET_KEY" value="{{ config.get('SECRET_KEY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>PERMANENT_SESSION_LIFETIME</td>
-            <td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PERMANENT_SESSION_LIFETIME" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>USE_X_SENDFILE</td>
-            <td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
-            <td>
-                <select name="USE_X_SENDFILE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('USE_X_SENDFILE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('USE_X_SENDFILE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SERVER_NAME</td>
-            <td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SERVER_NAME" value="{{ config.get('SERVER_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>APPLICATION_ROOT</td>
-            <td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="APPLICATION_ROOT" value="{{ config.get('APPLICATION_ROOT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_NAME</td>
-            <td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_NAME" value="{{ config.get('SESSION_COOKIE_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_DOMAIN</td>
-            <td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_DOMAIN" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_PATH</td>
-            <td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_PATH" value="{{ config.get('SESSION_COOKIE_PATH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_HTTPONLY</td>
-            <td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_HTTPONLY">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SECURE</td>
-            <td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_SECURE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_SECURE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_SECURE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SAMESITE</td>
-            <td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_SAMESITE" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_REFRESH_EACH_REQUEST</td>
-            <td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_REFRESH_EACH_REQUEST">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_CONTENT_LENGTH</td>
-            <td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_CONTENT_LENGTH" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SEND_FILE_MAX_AGE_DEFAULT</td>
-            <td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SEND_FILE_MAX_AGE_DEFAULT" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_BAD_REQUEST_ERRORS</td>
-            <td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_BAD_REQUEST_ERRORS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_HTTP_EXCEPTIONS</td>
-            <td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_HTTP_EXCEPTIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>EXPLAIN_TEMPLATE_LOADING</td>
-            <td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
-            <td>
-                <select name="EXPLAIN_TEMPLATE_LOADING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PREFERRED_URL_SCHEME</td>
-            <td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PREFERRED_URL_SCHEME" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TEMPLATES_AUTO_RELOAD</td>
-            <td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="TEMPLATES_AUTO_RELOAD" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_COOKIE_SIZE</td>
-            <td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_COOKIE_SIZE" value="{{ config.get('MAX_COOKIE_SIZE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_ENABLED</td>
-            <td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_CHECK_DEFAULT</td>
-            <td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_CHECK_DEFAULT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_METHODS</td>
-            <td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_METHODS" value="{{ config.get('WTF_CSRF_METHODS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_FIELD_NAME</td>
-            <td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_FIELD_NAME" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_HEADERS</td>
-            <td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_HEADERS" value="{{ config.get('WTF_CSRF_HEADERS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_TIME_LIMIT</td>
-            <td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_TIME_LIMIT" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_SSL_STRICT</td>
-            <td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_SSL_STRICT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_SSL_STRICT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_SSL_STRICT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_DATABASE_URI</td>
-            <td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_DATABASE_URI" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
-            <td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_TRACK_MODIFICATIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ENGINE_OPTIONS</td>
-            <td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_ENGINE_OPTIONS" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ECHO</td>
-            <td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_ECHO">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_ECHO') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_ECHO') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_BINDS</td>
-            <td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_BINDS" value="{{ config.get('SQLALCHEMY_BINDS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_RECORD_QUERIES</td>
-            <td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_RECORD_QUERIES">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_SERVER</td>
-            <td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_SERVER" value="{{ config.get('MAIL_SERVER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PORT</td>
-            <td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PORT" value="{{ config.get('MAIL_PORT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USE_TLS</td>
-            <td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
-            <td>
-                <select name="MAIL_USE_TLS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAIL_USE_TLS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAIL_USE_TLS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USERNAME</td>
-            <td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_USERNAME" value="{{ config.get('MAIL_USERNAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PASSWORD</td>
-            <td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PASSWORD" value="{{ config.get('MAIL_PASSWORD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_ENABLED</td>
-            <td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_ENABLED" value="{{ config.get('RATELIMIT_ENABLED', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_STRATEGY</td>
-            <td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_STRATEGY" value="{{ config.get('RATELIMIT_STRATEGY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>UPLOAD_FOLDER</td>
-            <td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="UPLOAD_FOLDER" value="{{ config.get('UPLOAD_FOLDER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>REWARDS_ENABLED</td>
-            <td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="REWARDS_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('REWARDS_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('REWARDS_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAINTENANCE_MODE</td>
-            <td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
-            <td>
-                <select name="MAINTENANCE_MODE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAINTENANCE_MODE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAINTENANCE_MODE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>ENABLE_IP_TRACKING</td>
-            <td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
-            <td>
-                <select name="ENABLE_IP_TRACKING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('ENABLE_IP_TRACKING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('ENABLE_IP_TRACKING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>AUTO_LOGIN_AFTER_REGISTRATION</td>
-            <td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
-            <td>
-                <select name="AUTO_LOGIN_AFTER_REGISTRATION">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PASSWORD_MIN_LENGTH</td>
-            <td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PASSWORD_MIN_LENGTH" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>DAILY_LOGIN_REWARD</td>
-            <td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="DAILY_LOGIN_REWARD" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_REWARD_AMOUNT</td>
-            <td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_REWARD_AMOUNT" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_WATCH_TIME</td>
-            <td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_WATCH_TIME" value="{{ config.get('VIDEO_WATCH_TIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>ANTI_CHEAT_TOLERANCE</td>
-            <td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="ANTI_CHEAT_TOLERANCE" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_IP_HISTORY</td>
-            <td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_IP_HISTORY" value="{{ config.get('MAX_IP_HISTORY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MIN_WITHDRAW_AMOUNT</td>
-            <td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MIN_WITHDRAW_AMOUNT" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}">
-            </td>
-        </tr>
-    </table>
-    <br>
-    <button type="submit" class="btn">Save Environment Settings</button>
-  </form>
-</body>
+<h2>🔐 Security &amp; Compliance</h2>
+<div class="sub-section">
+<label>Admin Roles</label>
+<select><option>Super Admin</option><option>Finance Admin</option></select>
+<button class="btn">Assign Role</button>
+<label>Request Backup / Recovery</label>
+<button class="btn">Generate Backup</button>
+<label>View Audit Log</label>
+<button class="btn">Open Logs</button>
+</div>
+</div>
+<div class="section">
+<h2>📣 Communication &amp; Support</h2>
+<div class="sub-section">
+<label>Send Notification</label>
+<textarea placeholder="Type your message..." rows="4"></textarea>
+<button class="btn">Send Notification</button>
+<label>Manage Support Tickets</label>
+<button class="btn">Open Support Console</button>
+<label>Schedule Promo Campaign</label>
+<input placeholder="Campaign title" type="text"/>
+<button class="btn">Schedule</button>
+</div>
+</div>
+<div class="section">
+<h2>🧪 Full Environment Variables</h2>
+<form action="/admin/update_config" method="POST">
+<table>
+<tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
+<tr>
+<td>DEBUG</td>
+<td>{{ config.get('DEBUG', 'Not Set') }}</td>
+<td>
+<select name="DEBUG">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('debug')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('debug')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TESTING</td>
+<td>{{ config.get('TESTING', 'Not Set') }}</td>
+<td>
+<select name="TESTING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('testing')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('testing')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PROPAGATE_EXCEPTIONS</td>
+<td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<input name="PROPAGATE_EXCEPTIONS" type="text" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SECRET_KEY</td>
+<td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
+<td>
+<input name="SECRET_KEY" type="text" value="{{ config.get('SECRET_KEY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>PERMANENT_SESSION_LIFETIME</td>
+<td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
+<td>
+<input name="PERMANENT_SESSION_LIFETIME" type="text" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>USE_X_SENDFILE</td>
+<td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
+<td>
+<select name="USE_X_SENDFILE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('use_x_sendfile')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('use_x_sendfile')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SERVER_NAME</td>
+<td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
+<td>
+<input name="SERVER_NAME" type="text" value="{{ config.get('SERVER_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>APPLICATION_ROOT</td>
+<td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
+<td>
+<input name="APPLICATION_ROOT" type="text" value="{{ config.get('APPLICATION_ROOT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_NAME</td>
+<td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_NAME" type="text" value="{{ config.get('SESSION_COOKIE_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_DOMAIN</td>
+<td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_DOMAIN" type="text" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_PATH</td>
+<td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_PATH" type="text" value="{{ config.get('SESSION_COOKIE_PATH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_HTTPONLY</td>
+<td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_HTTPONLY">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_httponly')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_httponly')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SECURE</td>
+<td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_SECURE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_secure')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_secure')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SAMESITE</td>
+<td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_SAMESITE" type="text" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_REFRESH_EACH_REQUEST</td>
+<td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
+<td>
+<select name="SESSION_REFRESH_EACH_REQUEST">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_refresh_each_request')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_refresh_each_request')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAX_CONTENT_LENGTH</td>
+<td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="MAX_CONTENT_LENGTH" type="text" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SEND_FILE_MAX_AGE_DEFAULT</td>
+<td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
+<td>
+<input name="SEND_FILE_MAX_AGE_DEFAULT" type="text" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TRAP_BAD_REQUEST_ERRORS</td>
+<td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_BAD_REQUEST_ERRORS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_bad_request_errors')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_bad_request_errors')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TRAP_HTTP_EXCEPTIONS</td>
+<td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_HTTP_EXCEPTIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_http_exceptions')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_http_exceptions')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>EXPLAIN_TEMPLATE_LOADING</td>
+<td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
+<td>
+<select name="EXPLAIN_TEMPLATE_LOADING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('explain_template_loading')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('explain_template_loading')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PREFERRED_URL_SCHEME</td>
+<td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
+<td>
+<input name="PREFERRED_URL_SCHEME" type="text" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TEMPLATES_AUTO_RELOAD</td>
+<td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
+<td>
+<input name="TEMPLATES_AUTO_RELOAD" type="text" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_COOKIE_SIZE</td>
+<td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
+<td>
+<input name="MAX_COOKIE_SIZE" type="text" value="{{ config.get('MAX_COOKIE_SIZE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_ENABLED</td>
+<td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_CHECK_DEFAULT</td>
+<td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_CHECK_DEFAULT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_check_default')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_check_default')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_METHODS</td>
+<td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_METHODS" type="text" value="{{ config.get('WTF_CSRF_METHODS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_FIELD_NAME</td>
+<td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_FIELD_NAME" type="text" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_HEADERS</td>
+<td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_HEADERS" type="text" value="{{ config.get('WTF_CSRF_HEADERS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_TIME_LIMIT</td>
+<td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_TIME_LIMIT" type="text" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_SSL_STRICT</td>
+<td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_SSL_STRICT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_ssl_strict')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_ssl_strict')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_DATABASE_URI</td>
+<td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_DATABASE_URI" type="text" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
+<td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_TRACK_MODIFICATIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_track_modifications')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_track_modifications')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ENGINE_OPTIONS</td>
+<td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_ENGINE_OPTIONS" type="text" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ECHO</td>
+<td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_ECHO">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_echo')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_echo')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_BINDS</td>
+<td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_BINDS" type="text" value="{{ config.get('SQLALCHEMY_BINDS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_RECORD_QUERIES</td>
+<td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_RECORD_QUERIES">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_record_queries')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_record_queries')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_SERVER</td>
+<td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
+<td>
+<input name="MAIL_SERVER" type="text" value="{{ config.get('MAIL_SERVER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PORT</td>
+<td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PORT" type="text" value="{{ config.get('MAIL_PORT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_USE_TLS</td>
+<td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
+<td>
+<select name="MAIL_USE_TLS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('mail_use_tls')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('mail_use_tls')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_USERNAME</td>
+<td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
+<td>
+<input name="MAIL_USERNAME" type="text" value="{{ config.get('MAIL_USERNAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PASSWORD</td>
+<td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PASSWORD" type="text" value="{{ config.get('MAIL_PASSWORD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_ENABLED</td>
+<td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_ENABLED" type="text" value="{{ config.get('RATELIMIT_ENABLED', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_STRATEGY</td>
+<td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_STRATEGY" type="text" value="{{ config.get('RATELIMIT_STRATEGY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>UPLOAD_FOLDER</td>
+<td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
+<td>
+<input name="UPLOAD_FOLDER" type="text" value="{{ config.get('UPLOAD_FOLDER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>REWARDS_ENABLED</td>
+<td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="REWARDS_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('rewards_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('rewards_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAINTENANCE_MODE</td>
+<td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
+<td>
+<select name="MAINTENANCE_MODE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('maintenance_mode')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('maintenance_mode')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>ENABLE_IP_TRACKING</td>
+<td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
+<td>
+<select name="ENABLE_IP_TRACKING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('enable_ip_tracking')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('enable_ip_tracking')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>AUTO_LOGIN_AFTER_REGISTRATION</td>
+<td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
+<td>
+<select name="AUTO_LOGIN_AFTER_REGISTRATION">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('auto_login_after_registration')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('auto_login_after_registration')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PASSWORD_MIN_LENGTH</td>
+<td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="PASSWORD_MIN_LENGTH" type="text" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>DAILY_LOGIN_REWARD</td>
+<td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
+<td>
+<input name="DAILY_LOGIN_REWARD" type="text" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_REWARD_AMOUNT</td>
+<td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_REWARD_AMOUNT" type="text" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_WATCH_TIME</td>
+<td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_WATCH_TIME" type="text" value="{{ config.get('VIDEO_WATCH_TIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>ANTI_CHEAT_TOLERANCE</td>
+<td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
+<td>
+<input name="ANTI_CHEAT_TOLERANCE" type="text" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_IP_HISTORY</td>
+<td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
+<td>
+<input name="MAX_IP_HISTORY" type="text" value="{{ config.get('MAX_IP_HISTORY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MIN_WITHDRAW_AMOUNT</td>
+<td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="MIN_WITHDRAW_AMOUNT" type="text" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}"/>
+</td>
+</tr>
+</table>
+<br/>
+<button class="btn" type="submit">Save Environment Settings</button>
+</form>
+</div></div></body>
 </html>
+<div class="section">
+<h2>🧪 Full Environment Variables</h2>
+<form action="/admin/update_config" method="POST">
+<table>
+<tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
+<tr>
+<td>DEBUG</td>
+<td>{{ config.get('DEBUG', 'Not Set') }}</td>
+<td>
+<select name="DEBUG">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('debug')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('debug')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TESTING</td>
+<td>{{ config.get('TESTING', 'Not Set') }}</td>
+<td>
+<select name="TESTING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('testing')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('testing')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PROPAGATE_EXCEPTIONS</td>
+<td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<input name="PROPAGATE_EXCEPTIONS" type="text" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SECRET_KEY</td>
+<td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
+<td>
+<input name="SECRET_KEY" type="text" value="{{ config.get('SECRET_KEY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>PERMANENT_SESSION_LIFETIME</td>
+<td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
+<td>
+<input name="PERMANENT_SESSION_LIFETIME" type="text" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>USE_X_SENDFILE</td>
+<td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
+<td>
+<select name="USE_X_SENDFILE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('use_x_sendfile')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('use_x_sendfile')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SERVER_NAME</td>
+<td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
+<td>
+<input name="SERVER_NAME" type="text" value="{{ config.get('SERVER_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>APPLICATION_ROOT</td>
+<td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
+<td>
+<input name="APPLICATION_ROOT" type="text" value="{{ config.get('APPLICATION_ROOT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_NAME</td>
+<td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_NAME" type="text" value="{{ config.get('SESSION_COOKIE_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_DOMAIN</td>
+<td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_DOMAIN" type="text" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_PATH</td>
+<td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_PATH" type="text" value="{{ config.get('SESSION_COOKIE_PATH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_HTTPONLY</td>
+<td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_HTTPONLY">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_httponly')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_httponly')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SECURE</td>
+<td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_SECURE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_secure')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_secure')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SAMESITE</td>
+<td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_SAMESITE" type="text" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_REFRESH_EACH_REQUEST</td>
+<td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
+<td>
+<select name="SESSION_REFRESH_EACH_REQUEST">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_refresh_each_request')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_refresh_each_request')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAX_CONTENT_LENGTH</td>
+<td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="MAX_CONTENT_LENGTH" type="text" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SEND_FILE_MAX_AGE_DEFAULT</td>
+<td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
+<td>
+<input name="SEND_FILE_MAX_AGE_DEFAULT" type="text" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TRAP_BAD_REQUEST_ERRORS</td>
+<td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_BAD_REQUEST_ERRORS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_bad_request_errors')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_bad_request_errors')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TRAP_HTTP_EXCEPTIONS</td>
+<td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_HTTP_EXCEPTIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_http_exceptions')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_http_exceptions')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>EXPLAIN_TEMPLATE_LOADING</td>
+<td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
+<td>
+<select name="EXPLAIN_TEMPLATE_LOADING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('explain_template_loading')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('explain_template_loading')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PREFERRED_URL_SCHEME</td>
+<td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
+<td>
+<input name="PREFERRED_URL_SCHEME" type="text" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TEMPLATES_AUTO_RELOAD</td>
+<td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
+<td>
+<input name="TEMPLATES_AUTO_RELOAD" type="text" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_COOKIE_SIZE</td>
+<td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
+<td>
+<input name="MAX_COOKIE_SIZE" type="text" value="{{ config.get('MAX_COOKIE_SIZE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_ENABLED</td>
+<td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_CHECK_DEFAULT</td>
+<td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_CHECK_DEFAULT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_check_default')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_check_default')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_METHODS</td>
+<td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_METHODS" type="text" value="{{ config.get('WTF_CSRF_METHODS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_FIELD_NAME</td>
+<td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_FIELD_NAME" type="text" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_HEADERS</td>
+<td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_HEADERS" type="text" value="{{ config.get('WTF_CSRF_HEADERS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_TIME_LIMIT</td>
+<td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_TIME_LIMIT" type="text" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_SSL_STRICT</td>
+<td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_SSL_STRICT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_ssl_strict')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_ssl_strict')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_DATABASE_URI</td>
+<td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_DATABASE_URI" type="text" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
+<td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_TRACK_MODIFICATIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_track_modifications')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_track_modifications')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ENGINE_OPTIONS</td>
+<td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_ENGINE_OPTIONS" type="text" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ECHO</td>
+<td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_ECHO">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_echo')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_echo')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_BINDS</td>
+<td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_BINDS" type="text" value="{{ config.get('SQLALCHEMY_BINDS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_RECORD_QUERIES</td>
+<td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_RECORD_QUERIES">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_record_queries')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_record_queries')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_SERVER</td>
+<td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
+<td>
+<input name="MAIL_SERVER" type="text" value="{{ config.get('MAIL_SERVER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PORT</td>
+<td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PORT" type="text" value="{{ config.get('MAIL_PORT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_USE_TLS</td>
+<td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
+<td>
+<select name="MAIL_USE_TLS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('mail_use_tls')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('mail_use_tls')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_USERNAME</td>
+<td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
+<td>
+<input name="MAIL_USERNAME" type="text" value="{{ config.get('MAIL_USERNAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PASSWORD</td>
+<td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PASSWORD" type="text" value="{{ config.get('MAIL_PASSWORD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_ENABLED</td>
+<td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_ENABLED" type="text" value="{{ config.get('RATELIMIT_ENABLED', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_STRATEGY</td>
+<td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_STRATEGY" type="text" value="{{ config.get('RATELIMIT_STRATEGY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>UPLOAD_FOLDER</td>
+<td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
+<td>
+<input name="UPLOAD_FOLDER" type="text" value="{{ config.get('UPLOAD_FOLDER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>REWARDS_ENABLED</td>
+<td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="REWARDS_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('rewards_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('rewards_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAINTENANCE_MODE</td>
+<td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
+<td>
+<select name="MAINTENANCE_MODE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('maintenance_mode')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('maintenance_mode')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>ENABLE_IP_TRACKING</td>
+<td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
+<td>
+<select name="ENABLE_IP_TRACKING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('enable_ip_tracking')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('enable_ip_tracking')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>AUTO_LOGIN_AFTER_REGISTRATION</td>
+<td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
+<td>
+<select name="AUTO_LOGIN_AFTER_REGISTRATION">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('auto_login_after_registration')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('auto_login_after_registration')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PASSWORD_MIN_LENGTH</td>
+<td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="PASSWORD_MIN_LENGTH" type="text" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>DAILY_LOGIN_REWARD</td>
+<td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
+<td>
+<input name="DAILY_LOGIN_REWARD" type="text" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_REWARD_AMOUNT</td>
+<td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_REWARD_AMOUNT" type="text" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_WATCH_TIME</td>
+<td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_WATCH_TIME" type="text" value="{{ config.get('VIDEO_WATCH_TIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>ANTI_CHEAT_TOLERANCE</td>
+<td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
+<td>
+<input name="ANTI_CHEAT_TOLERANCE" type="text" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_IP_HISTORY</td>
+<td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
+<td>
+<input name="MAX_IP_HISTORY" type="text" value="{{ config.get('MAX_IP_HISTORY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MIN_WITHDRAW_AMOUNT</td>
+<td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="MIN_WITHDRAW_AMOUNT" type="text" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}"/>
+</td>
+</tr>
+</table>
+<br/>
+<button class="btn" type="submit">Save Environment Settings</button>
+</form>
+
 
 <div class="section">
-  <h2>🧪 Full Environment Variables</h2>
-  <form method="POST" action="/admin/update_config">
-    <table>
-      <tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
-      
-        <tr>
-            <td>DEBUG</td>
-            <td>{{ config.get('DEBUG', 'Not Set') }}</td>
-            <td>
-                <select name="DEBUG">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('DEBUG') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('DEBUG') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TESTING</td>
-            <td>{{ config.get('TESTING', 'Not Set') }}</td>
-            <td>
-                <select name="TESTING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TESTING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TESTING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PROPAGATE_EXCEPTIONS</td>
-            <td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PROPAGATE_EXCEPTIONS" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SECRET_KEY</td>
-            <td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SECRET_KEY" value="{{ config.get('SECRET_KEY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>PERMANENT_SESSION_LIFETIME</td>
-            <td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PERMANENT_SESSION_LIFETIME" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>USE_X_SENDFILE</td>
-            <td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
-            <td>
-                <select name="USE_X_SENDFILE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('USE_X_SENDFILE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('USE_X_SENDFILE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SERVER_NAME</td>
-            <td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SERVER_NAME" value="{{ config.get('SERVER_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>APPLICATION_ROOT</td>
-            <td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="APPLICATION_ROOT" value="{{ config.get('APPLICATION_ROOT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_NAME</td>
-            <td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_NAME" value="{{ config.get('SESSION_COOKIE_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_DOMAIN</td>
-            <td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_DOMAIN" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_PATH</td>
-            <td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_PATH" value="{{ config.get('SESSION_COOKIE_PATH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_HTTPONLY</td>
-            <td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_HTTPONLY">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SECURE</td>
-            <td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_SECURE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_SECURE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_SECURE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SAMESITE</td>
-            <td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_SAMESITE" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_REFRESH_EACH_REQUEST</td>
-            <td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_REFRESH_EACH_REQUEST">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_CONTENT_LENGTH</td>
-            <td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_CONTENT_LENGTH" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SEND_FILE_MAX_AGE_DEFAULT</td>
-            <td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SEND_FILE_MAX_AGE_DEFAULT" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_BAD_REQUEST_ERRORS</td>
-            <td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_BAD_REQUEST_ERRORS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_HTTP_EXCEPTIONS</td>
-            <td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_HTTP_EXCEPTIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>EXPLAIN_TEMPLATE_LOADING</td>
-            <td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
-            <td>
-                <select name="EXPLAIN_TEMPLATE_LOADING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PREFERRED_URL_SCHEME</td>
-            <td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PREFERRED_URL_SCHEME" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TEMPLATES_AUTO_RELOAD</td>
-            <td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="TEMPLATES_AUTO_RELOAD" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_COOKIE_SIZE</td>
-            <td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_COOKIE_SIZE" value="{{ config.get('MAX_COOKIE_SIZE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_ENABLED</td>
-            <td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_CHECK_DEFAULT</td>
-            <td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_CHECK_DEFAULT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_METHODS</td>
-            <td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_METHODS" value="{{ config.get('WTF_CSRF_METHODS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_FIELD_NAME</td>
-            <td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_FIELD_NAME" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_HEADERS</td>
-            <td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_HEADERS" value="{{ config.get('WTF_CSRF_HEADERS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_TIME_LIMIT</td>
-            <td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_TIME_LIMIT" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_SSL_STRICT</td>
-            <td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_SSL_STRICT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_SSL_STRICT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_SSL_STRICT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_DATABASE_URI</td>
-            <td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_DATABASE_URI" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
-            <td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_TRACK_MODIFICATIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ENGINE_OPTIONS</td>
-            <td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_ENGINE_OPTIONS" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ECHO</td>
-            <td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_ECHO">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_ECHO') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_ECHO') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_BINDS</td>
-            <td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_BINDS" value="{{ config.get('SQLALCHEMY_BINDS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_RECORD_QUERIES</td>
-            <td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_RECORD_QUERIES">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_SERVER</td>
-            <td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_SERVER" value="{{ config.get('MAIL_SERVER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PORT</td>
-            <td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PORT" value="{{ config.get('MAIL_PORT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USE_TLS</td>
-            <td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
-            <td>
-                <select name="MAIL_USE_TLS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAIL_USE_TLS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAIL_USE_TLS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USERNAME</td>
-            <td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_USERNAME" value="{{ config.get('MAIL_USERNAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PASSWORD</td>
-            <td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PASSWORD" value="{{ config.get('MAIL_PASSWORD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_ENABLED</td>
-            <td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_ENABLED" value="{{ config.get('RATELIMIT_ENABLED', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_STRATEGY</td>
-            <td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_STRATEGY" value="{{ config.get('RATELIMIT_STRATEGY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>UPLOAD_FOLDER</td>
-            <td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="UPLOAD_FOLDER" value="{{ config.get('UPLOAD_FOLDER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>REWARDS_ENABLED</td>
-            <td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="REWARDS_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('REWARDS_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('REWARDS_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAINTENANCE_MODE</td>
-            <td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
-            <td>
-                <select name="MAINTENANCE_MODE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAINTENANCE_MODE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAINTENANCE_MODE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>ENABLE_IP_TRACKING</td>
-            <td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
-            <td>
-                <select name="ENABLE_IP_TRACKING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('ENABLE_IP_TRACKING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('ENABLE_IP_TRACKING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>AUTO_LOGIN_AFTER_REGISTRATION</td>
-            <td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
-            <td>
-                <select name="AUTO_LOGIN_AFTER_REGISTRATION">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PASSWORD_MIN_LENGTH</td>
-            <td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PASSWORD_MIN_LENGTH" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>DAILY_LOGIN_REWARD</td>
-            <td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="DAILY_LOGIN_REWARD" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_REWARD_AMOUNT</td>
-            <td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_REWARD_AMOUNT" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_WATCH_TIME</td>
-            <td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_WATCH_TIME" value="{{ config.get('VIDEO_WATCH_TIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>ANTI_CHEAT_TOLERANCE</td>
-            <td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="ANTI_CHEAT_TOLERANCE" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_IP_HISTORY</td>
-            <td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_IP_HISTORY" value="{{ config.get('MAX_IP_HISTORY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MIN_WITHDRAW_AMOUNT</td>
-            <td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MIN_WITHDRAW_AMOUNT" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}">
-            </td>
-        </tr>
-    </table>
-    <br>
-    <button type="submit" class="btn">Save Environment Settings</button>
-  </form>
-</body>
-</html>
+<h2>🧪 Full Environment Variables</h2>
+<form action="/admin/update_config" method="POST">
+<table>
+<tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
+<tr>
+<td>DEBUG</td>
+<td>{{ config.get('DEBUG', 'Not Set') }}</td>
+<td>
+<select name="DEBUG">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('debug')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('debug')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TESTING</td>
+<td>{{ config.get('TESTING', 'Not Set') }}</td>
+<td>
+<select name="TESTING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('testing')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('testing')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PROPAGATE_EXCEPTIONS</td>
+<td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<input name="PROPAGATE_EXCEPTIONS" type="text" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SECRET_KEY</td>
+<td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
+<td>
+<input name="SECRET_KEY" type="text" value="{{ config.get('SECRET_KEY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>PERMANENT_SESSION_LIFETIME</td>
+<td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
+<td>
+<input name="PERMANENT_SESSION_LIFETIME" type="text" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>USE_X_SENDFILE</td>
+<td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
+<td>
+<select name="USE_X_SENDFILE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('use_x_sendfile')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('use_x_sendfile')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SERVER_NAME</td>
+<td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
+<td>
+<input name="SERVER_NAME" type="text" value="{{ config.get('SERVER_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>APPLICATION_ROOT</td>
+<td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
+<td>
+<input name="APPLICATION_ROOT" type="text" value="{{ config.get('APPLICATION_ROOT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_NAME</td>
+<td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_NAME" type="text" value="{{ config.get('SESSION_COOKIE_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_DOMAIN</td>
+<td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_DOMAIN" type="text" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_PATH</td>
+<td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_PATH" type="text" value="{{ config.get('SESSION_COOKIE_PATH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_HTTPONLY</td>
+<td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_HTTPONLY">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_httponly')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_httponly')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SECURE</td>
+<td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
+<td>
+<select name="SESSION_COOKIE_SECURE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_cookie_secure')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_cookie_secure')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SESSION_COOKIE_SAMESITE</td>
+<td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
+<td>
+<input name="SESSION_COOKIE_SAMESITE" type="text" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SESSION_REFRESH_EACH_REQUEST</td>
+<td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
+<td>
+<select name="SESSION_REFRESH_EACH_REQUEST">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('session_refresh_each_request')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('session_refresh_each_request')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAX_CONTENT_LENGTH</td>
+<td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="MAX_CONTENT_LENGTH" type="text" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SEND_FILE_MAX_AGE_DEFAULT</td>
+<td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
+<td>
+<input name="SEND_FILE_MAX_AGE_DEFAULT" type="text" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TRAP_BAD_REQUEST_ERRORS</td>
+<td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_BAD_REQUEST_ERRORS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_bad_request_errors')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_bad_request_errors')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>TRAP_HTTP_EXCEPTIONS</td>
+<td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
+<td>
+<select name="TRAP_HTTP_EXCEPTIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('trap_http_exceptions')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('trap_http_exceptions')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>EXPLAIN_TEMPLATE_LOADING</td>
+<td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
+<td>
+<select name="EXPLAIN_TEMPLATE_LOADING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('explain_template_loading')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('explain_template_loading')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PREFERRED_URL_SCHEME</td>
+<td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
+<td>
+<input name="PREFERRED_URL_SCHEME" type="text" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>TEMPLATES_AUTO_RELOAD</td>
+<td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
+<td>
+<input name="TEMPLATES_AUTO_RELOAD" type="text" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_COOKIE_SIZE</td>
+<td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
+<td>
+<input name="MAX_COOKIE_SIZE" type="text" value="{{ config.get('MAX_COOKIE_SIZE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_ENABLED</td>
+<td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_CHECK_DEFAULT</td>
+<td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_CHECK_DEFAULT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_check_default')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_check_default')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_METHODS</td>
+<td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_METHODS" type="text" value="{{ config.get('WTF_CSRF_METHODS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_FIELD_NAME</td>
+<td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_FIELD_NAME" type="text" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_HEADERS</td>
+<td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_HEADERS" type="text" value="{{ config.get('WTF_CSRF_HEADERS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_TIME_LIMIT</td>
+<td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
+<td>
+<input name="WTF_CSRF_TIME_LIMIT" type="text" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>WTF_CSRF_SSL_STRICT</td>
+<td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
+<td>
+<select name="WTF_CSRF_SSL_STRICT">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('wtf_csrf_ssl_strict')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('wtf_csrf_ssl_strict')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_DATABASE_URI</td>
+<td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_DATABASE_URI" type="text" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
+<td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_TRACK_MODIFICATIONS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_track_modifications')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_track_modifications')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ENGINE_OPTIONS</td>
+<td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_ENGINE_OPTIONS" type="text" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_ECHO</td>
+<td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_ECHO">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_echo')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_echo')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_BINDS</td>
+<td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
+<td>
+<input name="SQLALCHEMY_BINDS" type="text" value="{{ config.get('SQLALCHEMY_BINDS', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>SQLALCHEMY_RECORD_QUERIES</td>
+<td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
+<td>
+<select name="SQLALCHEMY_RECORD_QUERIES">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('sqlalchemy_record_queries')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('sqlalchemy_record_queries')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_SERVER</td>
+<td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
+<td>
+<input name="MAIL_SERVER" type="text" value="{{ config.get('MAIL_SERVER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PORT</td>
+<td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PORT" type="text" value="{{ config.get('MAIL_PORT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_USE_TLS</td>
+<td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
+<td>
+<select name="MAIL_USE_TLS">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('mail_use_tls')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('mail_use_tls')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAIL_USERNAME</td>
+<td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
+<td>
+<input name="MAIL_USERNAME" type="text" value="{{ config.get('MAIL_USERNAME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAIL_PASSWORD</td>
+<td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
+<td>
+<input name="MAIL_PASSWORD" type="text" value="{{ config.get('MAIL_PASSWORD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_ENABLED</td>
+<td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_ENABLED" type="text" value="{{ config.get('RATELIMIT_ENABLED', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>RATELIMIT_STRATEGY</td>
+<td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
+<td>
+<input name="RATELIMIT_STRATEGY" type="text" value="{{ config.get('RATELIMIT_STRATEGY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>UPLOAD_FOLDER</td>
+<td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
+<td>
+<input name="UPLOAD_FOLDER" type="text" value="{{ config.get('UPLOAD_FOLDER', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>REWARDS_ENABLED</td>
+<td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
+<td>
+<select name="REWARDS_ENABLED">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('rewards_enabled')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('rewards_enabled')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>MAINTENANCE_MODE</td>
+<td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
+<td>
+<select name="MAINTENANCE_MODE">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('maintenance_mode')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('maintenance_mode')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>ENABLE_IP_TRACKING</td>
+<td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
+<td>
+<select name="ENABLE_IP_TRACKING">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('enable_ip_tracking')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('enable_ip_tracking')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>AUTO_LOGIN_AFTER_REGISTRATION</td>
+<td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
+<td>
+<select name="AUTO_LOGIN_AFTER_REGISTRATION">
+<option value="">-- No Change --</option>
+<option %}="" %}selected{%="" ['true',="" config.get('auto_login_after_registration')="" endif="" if="" in="" true]="" value="True" {%="">True</option>
+<option %}="" %}selected{%="" ['false',="" config.get('auto_login_after_registration')="" endif="" false]="" if="" in="" value="False" {%="">False</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>PASSWORD_MIN_LENGTH</td>
+<td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
+<td>
+<input name="PASSWORD_MIN_LENGTH" type="text" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>DAILY_LOGIN_REWARD</td>
+<td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
+<td>
+<input name="DAILY_LOGIN_REWARD" type="text" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_REWARD_AMOUNT</td>
+<td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_REWARD_AMOUNT" type="text" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>VIDEO_WATCH_TIME</td>
+<td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
+<td>
+<input name="VIDEO_WATCH_TIME" type="text" value="{{ config.get('VIDEO_WATCH_TIME', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>ANTI_CHEAT_TOLERANCE</td>
+<td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
+<td>
+<input name="ANTI_CHEAT_TOLERANCE" type="text" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MAX_IP_HISTORY</td>
+<td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
+<td>
+<input name="MAX_IP_HISTORY" type="text" value="{{ config.get('MAX_IP_HISTORY', '') }}"/>
+</td>
+</tr>
+<tr>
+<td>MIN_WITHDRAW_AMOUNT</td>
+<td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
+<td>
+<input name="MIN_WITHDRAW_AMOUNT" type="text" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}"/>
+</td>
+</tr>
+</table>
+<br/>
+<button class="btn" type="submit">Save Environment Settings</button>
+</form>
 
-<div class="section">
-  <h2>🧪 Full Environment Variables</h2>
-  <form method="POST" action="/admin/update_config">
-    <table>
-      <tr><th>Variable</th><th>Current Value</th><th>New Value</th></tr>
-      
-        <tr>
-            <td>DEBUG</td>
-            <td>{{ config.get('DEBUG', 'Not Set') }}</td>
-            <td>
-                <select name="DEBUG">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('DEBUG') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('DEBUG') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TESTING</td>
-            <td>{{ config.get('TESTING', 'Not Set') }}</td>
-            <td>
-                <select name="TESTING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TESTING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TESTING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PROPAGATE_EXCEPTIONS</td>
-            <td>{{ config.get('PROPAGATE_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PROPAGATE_EXCEPTIONS" value="{{ config.get('PROPAGATE_EXCEPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SECRET_KEY</td>
-            <td>{{ config.get('SECRET_KEY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SECRET_KEY" value="{{ config.get('SECRET_KEY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>PERMANENT_SESSION_LIFETIME</td>
-            <td>{{ config.get('PERMANENT_SESSION_LIFETIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PERMANENT_SESSION_LIFETIME" value="{{ config.get('PERMANENT_SESSION_LIFETIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>USE_X_SENDFILE</td>
-            <td>{{ config.get('USE_X_SENDFILE', 'Not Set') }}</td>
-            <td>
-                <select name="USE_X_SENDFILE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('USE_X_SENDFILE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('USE_X_SENDFILE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SERVER_NAME</td>
-            <td>{{ config.get('SERVER_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SERVER_NAME" value="{{ config.get('SERVER_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>APPLICATION_ROOT</td>
-            <td>{{ config.get('APPLICATION_ROOT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="APPLICATION_ROOT" value="{{ config.get('APPLICATION_ROOT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_NAME</td>
-            <td>{{ config.get('SESSION_COOKIE_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_NAME" value="{{ config.get('SESSION_COOKIE_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_DOMAIN</td>
-            <td>{{ config.get('SESSION_COOKIE_DOMAIN', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_DOMAIN" value="{{ config.get('SESSION_COOKIE_DOMAIN', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_PATH</td>
-            <td>{{ config.get('SESSION_COOKIE_PATH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_PATH" value="{{ config.get('SESSION_COOKIE_PATH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_HTTPONLY</td>
-            <td>{{ config.get('SESSION_COOKIE_HTTPONLY', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_HTTPONLY">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_HTTPONLY') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SECURE</td>
-            <td>{{ config.get('SESSION_COOKIE_SECURE', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_COOKIE_SECURE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_COOKIE_SECURE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_COOKIE_SECURE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_COOKIE_SAMESITE</td>
-            <td>{{ config.get('SESSION_COOKIE_SAMESITE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SESSION_COOKIE_SAMESITE" value="{{ config.get('SESSION_COOKIE_SAMESITE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SESSION_REFRESH_EACH_REQUEST</td>
-            <td>{{ config.get('SESSION_REFRESH_EACH_REQUEST', 'Not Set') }}</td>
-            <td>
-                <select name="SESSION_REFRESH_EACH_REQUEST">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SESSION_REFRESH_EACH_REQUEST') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_CONTENT_LENGTH</td>
-            <td>{{ config.get('MAX_CONTENT_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_CONTENT_LENGTH" value="{{ config.get('MAX_CONTENT_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SEND_FILE_MAX_AGE_DEFAULT</td>
-            <td>{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SEND_FILE_MAX_AGE_DEFAULT" value="{{ config.get('SEND_FILE_MAX_AGE_DEFAULT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_BAD_REQUEST_ERRORS</td>
-            <td>{{ config.get('TRAP_BAD_REQUEST_ERRORS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_BAD_REQUEST_ERRORS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_BAD_REQUEST_ERRORS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>TRAP_HTTP_EXCEPTIONS</td>
-            <td>{{ config.get('TRAP_HTTP_EXCEPTIONS', 'Not Set') }}</td>
-            <td>
-                <select name="TRAP_HTTP_EXCEPTIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('TRAP_HTTP_EXCEPTIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>EXPLAIN_TEMPLATE_LOADING</td>
-            <td>{{ config.get('EXPLAIN_TEMPLATE_LOADING', 'Not Set') }}</td>
-            <td>
-                <select name="EXPLAIN_TEMPLATE_LOADING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('EXPLAIN_TEMPLATE_LOADING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PREFERRED_URL_SCHEME</td>
-            <td>{{ config.get('PREFERRED_URL_SCHEME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PREFERRED_URL_SCHEME" value="{{ config.get('PREFERRED_URL_SCHEME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>TEMPLATES_AUTO_RELOAD</td>
-            <td>{{ config.get('TEMPLATES_AUTO_RELOAD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="TEMPLATES_AUTO_RELOAD" value="{{ config.get('TEMPLATES_AUTO_RELOAD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_COOKIE_SIZE</td>
-            <td>{{ config.get('MAX_COOKIE_SIZE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_COOKIE_SIZE" value="{{ config.get('MAX_COOKIE_SIZE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_ENABLED</td>
-            <td>{{ config.get('WTF_CSRF_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_CHECK_DEFAULT</td>
-            <td>{{ config.get('WTF_CSRF_CHECK_DEFAULT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_CHECK_DEFAULT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_CHECK_DEFAULT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_METHODS</td>
-            <td>{{ config.get('WTF_CSRF_METHODS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_METHODS" value="{{ config.get('WTF_CSRF_METHODS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_FIELD_NAME</td>
-            <td>{{ config.get('WTF_CSRF_FIELD_NAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_FIELD_NAME" value="{{ config.get('WTF_CSRF_FIELD_NAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_HEADERS</td>
-            <td>{{ config.get('WTF_CSRF_HEADERS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_HEADERS" value="{{ config.get('WTF_CSRF_HEADERS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_TIME_LIMIT</td>
-            <td>{{ config.get('WTF_CSRF_TIME_LIMIT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="WTF_CSRF_TIME_LIMIT" value="{{ config.get('WTF_CSRF_TIME_LIMIT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>WTF_CSRF_SSL_STRICT</td>
-            <td>{{ config.get('WTF_CSRF_SSL_STRICT', 'Not Set') }}</td>
-            <td>
-                <select name="WTF_CSRF_SSL_STRICT">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('WTF_CSRF_SSL_STRICT') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('WTF_CSRF_SSL_STRICT') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_DATABASE_URI</td>
-            <td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_DATABASE_URI" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_TRACK_MODIFICATIONS</td>
-            <td>{{ config.get('SQLALCHEMY_TRACK_MODIFICATIONS', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_TRACK_MODIFICATIONS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_TRACK_MODIFICATIONS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ENGINE_OPTIONS</td>
-            <td>{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_ENGINE_OPTIONS" value="{{ config.get('SQLALCHEMY_ENGINE_OPTIONS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_ECHO</td>
-            <td>{{ config.get('SQLALCHEMY_ECHO', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_ECHO">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_ECHO') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_ECHO') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_BINDS</td>
-            <td>{{ config.get('SQLALCHEMY_BINDS', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="SQLALCHEMY_BINDS" value="{{ config.get('SQLALCHEMY_BINDS', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>SQLALCHEMY_RECORD_QUERIES</td>
-            <td>{{ config.get('SQLALCHEMY_RECORD_QUERIES', 'Not Set') }}</td>
-            <td>
-                <select name="SQLALCHEMY_RECORD_QUERIES">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('SQLALCHEMY_RECORD_QUERIES') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_SERVER</td>
-            <td>{{ config.get('MAIL_SERVER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_SERVER" value="{{ config.get('MAIL_SERVER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PORT</td>
-            <td>{{ config.get('MAIL_PORT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PORT" value="{{ config.get('MAIL_PORT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USE_TLS</td>
-            <td>{{ config.get('MAIL_USE_TLS', 'Not Set') }}</td>
-            <td>
-                <select name="MAIL_USE_TLS">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAIL_USE_TLS') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAIL_USE_TLS') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_USERNAME</td>
-            <td>{{ config.get('MAIL_USERNAME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_USERNAME" value="{{ config.get('MAIL_USERNAME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAIL_PASSWORD</td>
-            <td>{{ config.get('MAIL_PASSWORD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAIL_PASSWORD" value="{{ config.get('MAIL_PASSWORD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_ENABLED</td>
-            <td>{{ config.get('RATELIMIT_ENABLED', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_ENABLED" value="{{ config.get('RATELIMIT_ENABLED', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>RATELIMIT_STRATEGY</td>
-            <td>{{ config.get('RATELIMIT_STRATEGY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="RATELIMIT_STRATEGY" value="{{ config.get('RATELIMIT_STRATEGY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>UPLOAD_FOLDER</td>
-            <td>{{ config.get('UPLOAD_FOLDER', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="UPLOAD_FOLDER" value="{{ config.get('UPLOAD_FOLDER', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>REWARDS_ENABLED</td>
-            <td>{{ config.get('REWARDS_ENABLED', 'Not Set') }}</td>
-            <td>
-                <select name="REWARDS_ENABLED">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('REWARDS_ENABLED') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('REWARDS_ENABLED') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>MAINTENANCE_MODE</td>
-            <td>{{ config.get('MAINTENANCE_MODE', 'Not Set') }}</td>
-            <td>
-                <select name="MAINTENANCE_MODE">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('MAINTENANCE_MODE') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('MAINTENANCE_MODE') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>ENABLE_IP_TRACKING</td>
-            <td>{{ config.get('ENABLE_IP_TRACKING', 'Not Set') }}</td>
-            <td>
-                <select name="ENABLE_IP_TRACKING">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('ENABLE_IP_TRACKING') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('ENABLE_IP_TRACKING') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>AUTO_LOGIN_AFTER_REGISTRATION</td>
-            <td>{{ config.get('AUTO_LOGIN_AFTER_REGISTRATION', 'Not Set') }}</td>
-            <td>
-                <select name="AUTO_LOGIN_AFTER_REGISTRATION">
-                    <option value="">-- No Change --</option>
-                    <option value="True" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['True', True] %}selected{% endif %}>True</option>
-                    <option value="False" {% if config.get('AUTO_LOGIN_AFTER_REGISTRATION') in ['False', False] %}selected{% endif %}>False</option>
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td>PASSWORD_MIN_LENGTH</td>
-            <td>{{ config.get('PASSWORD_MIN_LENGTH', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="PASSWORD_MIN_LENGTH" value="{{ config.get('PASSWORD_MIN_LENGTH', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>DAILY_LOGIN_REWARD</td>
-            <td>{{ config.get('DAILY_LOGIN_REWARD', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="DAILY_LOGIN_REWARD" value="{{ config.get('DAILY_LOGIN_REWARD', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_REWARD_AMOUNT</td>
-            <td>{{ config.get('VIDEO_REWARD_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_REWARD_AMOUNT" value="{{ config.get('VIDEO_REWARD_AMOUNT', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>VIDEO_WATCH_TIME</td>
-            <td>{{ config.get('VIDEO_WATCH_TIME', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="VIDEO_WATCH_TIME" value="{{ config.get('VIDEO_WATCH_TIME', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>ANTI_CHEAT_TOLERANCE</td>
-            <td>{{ config.get('ANTI_CHEAT_TOLERANCE', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="ANTI_CHEAT_TOLERANCE" value="{{ config.get('ANTI_CHEAT_TOLERANCE', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MAX_IP_HISTORY</td>
-            <td>{{ config.get('MAX_IP_HISTORY', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MAX_IP_HISTORY" value="{{ config.get('MAX_IP_HISTORY', '') }}">
-            </td>
-        </tr>
-        <tr>
-            <td>MIN_WITHDRAW_AMOUNT</td>
-            <td>{{ config.get('MIN_WITHDRAW_AMOUNT', 'Not Set') }}</td>
-            <td>
-                <input type="text" name="MIN_WITHDRAW_AMOUNT" value="{{ config.get('MIN_WITHDRAW_AMOUNT', '') }}">
-            </td>
-        </tr>
-    </table>
-    <br>
-    <button type="submit" class="btn">Save Environment Settings</button>
-  </form>
-</body>
-</html>
+</div></div>
