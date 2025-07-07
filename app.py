@@ -1496,111 +1496,12 @@ def api_earnings():
 
     return jsonify({'earnings': earnings_list})
 
-@app.route('/register', methods=['GET', 'POST']) 
-def register(): 
-    if request.method == 'POST': 
-        try:
-            email = request.form.get('email', '').strip().lower()
-            password = request.form.get('password', '')
-            confirm = request.form.get('confirm_password', '')
-            role = request.form.get('account_type', '')
-
-            # Validation
-            if not all([email, password, role]):
-                return jsonify({'error': 'All fields are required'}), 400
-
-            if PASSWORD_CONFIRMATION_REQUIRED and password != confirm:
-                return jsonify({'error': 'Passwords do not match'}), 400
-
-            if len(password) < PASSWORD_MIN_LENGTH:
-                return jsonify({'error': f'Password must be at least {PASSWORD_MIN_LENGTH} characters'}), 400
-
-            if role not in ALLOWED_ROLES:
-                return jsonify({'error': 'Invalid account type'}), 400
-
-            if User.query.filter_by(email=email).first():
-                return jsonify({'error': 'Email already exists'}), 409
-
-            # Create user
-            hashed = generate_password_hash(password)
-            user = User(
-                email=email, 
-                password_hash=hashed, 
-                account_type=role,
-                last_ip=get_client_ip() if ENABLE_IP_TRACKING else None
-            )
-            
-            db.session.add(user)
-            db.session.commit()
-
-            # Log registration IP
-            log_user_ip(user.id, "register")
-
-            # Send verification email
-            token = serializer.dumps(email, salt='email-confirm')
-            link = url_for('confirm_email', token=token, _external=True)
-            
-            text_body, html_body = create_verification_email(email, link)
-            
-            email_sent = send_email(
-                email, 
-                '🎬 Verify Your Watch & Earn Account', 
-                text_body, 
-                html_body
-            )
-            
-            if not email_sent:
-                print(f"⚠️ Email failed for {email}, but continuing...")
-
-            # UPDATED: Always redirect to success page to guide email verification
-            if AUTO_LOGIN_AFTER_REGISTRATION:
-                session['user_id'] = user.id
-                session['account_type'] = user.account_type
-                
-                # Redirect to appropriate success page based on account type
-                if user.account_type == 'YouTuber':
-                    success_route = 'youtuber_registration_success'
-                else:
-                    success_route = 'user_registration_success'
-                    
-                return jsonify({
-                    'success': True,
-                    'redirect': url_for(success_route, email=email),
-                    'account_type': user.account_type,
-                    'email_sent': email_sent
-                })
-
-            # If not auto-login, still redirect to success page
-            if user.account_type == 'YouTuber':
-                success_route = 'youtuber_registration_success'
-            else:
-                success_route = 'user_registration_success'
-                
-            return jsonify({
-                'success': True,
-                'redirect': url_for(success_route, email=email),
-                'account_type': user.account_type,
-                'email_sent': email_sent
-            })
-            
-        except Exception as e:
-            print(f"❌ Registration error: {str(e)}")
-            db.session.rollback()
-            return jsonify({'error': 'Registration failed. Please try again.'}), 500
-
-    return render_template('register.html')
-
-
 # Add these new routes for success pages
 @app.route('/registration-success/user')
 def user_registration_success():
     email = request.args.get('email', '')
     return render_template('success/user_registration_success.html', email=email)
 
-@app.route('/registration-success/youtuber')
-def youtuber_registration_success():
-    email = request.args.get('email', '')
-    return render_template('success/youtuber_registration_success.html', email=email)
 
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit(LOGIN_RATE_LIMIT)
@@ -2444,10 +2345,6 @@ def upload_success(video_id=None):
     
     return render_template('upload_success.html', **template_data)
     
-@app.route('/test')
-def test():
-    return render_template('user_dashboard.html')
-
 @app.route('/rules_popup')
 def rules_popup():
     return render_template('rules_popup.html')  # or your actual template
@@ -2481,27 +2378,6 @@ def user_stats():
 @app.route('/earnings')
 def earnings_page():
     return render_template('earnings.html')
-
-
-
-@app.route('/api/earnings')
-def api_earnings():
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    user_id = session['user_id']
-    earnings = Earnings.query.filter_by(user_id=user_id).order_by(Earnings.timestamp.desc()).all()
-
-    earnings_list = []
-    for earning in earnings:
-        earnings_list.append({
-            'type': earning.type,
-            'amount': earning.amount,
-            'timestamp': earning.timestamp.strftime('%Y-%m-%d %H:%M:%S')
-        })
-
-    return jsonify({'earnings': earnings_list})
-
 
 
 @app.route("/admin/panel")
