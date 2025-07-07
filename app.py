@@ -61,7 +61,8 @@ app.config['TESTING'] = os.environ.get('TESTING', 'False') == 'True'
 #==== Database Configuration ====
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///watch_and_earn.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
-db = SQLAlchemy(app)
+db = SQLAlchemy()
+d.b init_app(app)
 
 #==== Environment Config ====
 
