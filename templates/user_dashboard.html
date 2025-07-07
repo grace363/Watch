@@ -1,199 +1,33 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Control Panel</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <title>User Dashboard</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #f2f2f2;
-            padding: 20px;
+            margin: 0;
         }
-        h1 {
+        .sticky-balance {
+            position: sticky;
+            top: 0;
+            background-color: #f8f8f8;
+            padding: 10px;
             text-align: center;
-            margin-bottom: 25px;
-        }
-        table {
-            width: 100%;
-            margin-bottom: 40px;
-            border-collapse: collapse;
-            background: white;
-            box-shadow: 0 0 5px rgba(0,0,0,0.1);
-        }
-        th, td {
-            padding: 12px;
-            border: 1px solid #ddd;
-            text-align: left;
-        }
-        th {
-            background: #444;
-            color: white;
-        }
-        tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-        .section {
-            margin-bottom: 40px;
-        }
-        .reset-btn {
-            background: #e53935;
-            color: white;
-            padding: 12px 20px;
             font-weight: bold;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .reset-btn:hover {
-            background: #c62828;
+            border-bottom: 1px solid #ccc;
+            z-index: 999;
         }
     </style>
 </head>
 <body>
-
-<h1>Admin Control Panel</h1>
-
-<div class="section">
-    <h2>🔧 System Settings</h2>
-    <table>
-        <tr><th>Key</th><th>Value</th></tr>
-        {% for key, value in config.items() %}
-        <tr><td>{{ key }}</td><td>{{ value }}</td></tr>
-        {% endfor %}
-    </table>
-</div>
-
-<div class="section">
-    <h2>👥 Users</h2>
-    <table>
-        <tr>
-            <th>ID</th><th>Email</th><th>Balance ($)</th><th>Banned</th><th>Admin</th><th>Actions</th>
-        </tr>
-        {% for user in users %}
-        <tr>
-            <td>{{ user.id }}</td>
-            <td>{{ user.email }}</td>
-            <td>{{ "%.2f"|format(user.balance_usd) }}</td>
-            <td>{{ "Yes" if user.is_banned else "No" }}</td>
-            <td>{{ "Yes" if user.is_admin else "No" }}</td>
-            <td>
-                <!-- Placeholder: Could be made into buttons for edit/delete later -->
-                <a href="#">Edit</a> | <a href="#">Ban</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-
-<div class="section">
-    <h2>📺 Videos</h2>
-    <table>
-        <tr>
-            <th>ID</th><th>Title</th><th>Reward</th><th>Min Watch Time</th>
-        </tr>
-        {% for video in videos %}
-        <tr>
-            <td>{{ video.id }}</td>
-            <td>{{ video.title }}</td>
-            <td>{{ video.reward_amount }}</td>
-            <td>{{ video.min_watch_time }} sec</td>
-        </tr>
-        {% endfor %}
-    </table>
-</div>
-
-<div class="section" style="text-align: center;">
-    <form method="POST" action="/admin/reset_system" onsubmit="return confirm('Are you sure you want to reset the entire system?');">
-        <button type="submit" class="reset-btn">Reset Everything to Default</button>
-    </form>
-</div>
-
-<div class="section">
-  <h2>🔗 Upload YouTube Video</h2>
-  <form method="POST" action="/admin/upload_youtube">
-    <label>Title: <input type="text" name="title" required></label><br><br>
-    <label>YouTube URL: <input type="text" name="url" required></label><br><br>
-    <label>Reward ($): <input type="number" name="reward" step="0.01" required></label><br><br>
-    <label>Min Watch Time (sec): <input type="number" name="min_watch_time" required></label><br><br>
-    <button type="submit">Upload YouTube Video</button>
-  </form>
-</div>
-
-<div class="section">
-  <h2>📂 Upload Local Video File</h2>
-  <form method="POST" action="/admin/upload_video" enctype="multipart/form-data">
-    <label>Title: <input type="text" name="title"></label><br><br>
-    <label>Select File: <input type="file" name="video_file" required></label><br><br>
-    <label>Reward ($): <input type="number" name="reward" step="0.01" required></label><br><br>
-    <label>Min Watch Time (sec): <input type="number" name="min_watch_time" required></label><br><br>
-    <button type="submit">Upload Video</button>
-  </form>
-</div>
-<div class="section">
-  <h2>💸 Pending Payment Requests</h2>
-  <table>
-    <tr>
-      <th>User ID</th>
-      <th>Email</th>
-      <th>Amount</th>
-      <th>Status</th>
-      <th>Actions</th>
-    </tr>
-    {% for request in payment_requests %}
-    <tr>
-      <td>{{ request.user_id }}</td>
-      <td>{{ request.user.email }}</td>
-      <td>${{ "%.2f"|format(request.amount) }}</td>
-      <td>{{ request.status }}</td>
-      <td>
-        {% if request.status == 'pending' %}
-        <form method="POST" action="/admin/approve_payment" style="display:inline;">
-          <input type="hidden" name="request_id" value="{{ request.id }}">
-          <button type="submit">Approve</button>
-        </form>
-        <form method="POST" action="/admin/reject_payment" style="display:inline;">
-          <input type="hidden" name="request_id" value="{{ request.id }}">
-          <button type="submit">Reject</button>
-        </form>
-        {% else %}
-          {{ request.status|capitalize }}
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </table>
-</div>
-
-<div class="section">
-  <h2>⚙️ Environment Settings</h2>
-  <form method="POST" action="/admin/update_config">
-    <table>
-      <tr>
-        <th>Variable</th>
-        <th>Current Value</th>
-        <th>New Value</th>
-      </tr>
-      {% for key, value in config.items() %}
-      <tr>
-        <td>{{ key }}</td>
-        <td>{{ value }}</td>
-        <td>
-          {% if value in [true, false] %}
-            <select name="{{ key }}">
-              <option value="true" {% if value == true %}selected{% endif %}>True</option>
-              <option value="false" {% if value == false %}selected{% endif %}>False</option>
-            </select>
-          {% else %}
-            <input type="text" name="{{ key }}" value="{{ value }}">
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </table>
-    <br>
-    <button type="submit">Update Settings</button>
-  </form>
-</div>
+    <div class="sticky-balance">
+        Balance: $100.00
+    </div>
+    <div style="padding: 20px;">
+        <h1>Welcome to your Dashboard</h1>
+        <p>Here is your user-specific content.</p>
+    </div>
 </body>
 </html>
