@@ -1496,13 +1496,6 @@ def api_earnings():
 
     return jsonify({'earnings': earnings_list})
 
-
-@app.route('/') 
-def home(): 
-    if MAINTENANCE_MODE: 
-        return render_template('maintenance.html') if os.path.exists('templates/maintenance.html') else "Site is under maintenance. Please check back later."
-    return render_template('home.html')
-
 @app.route('/register', methods=['GET', 'POST']) 
 def register(): 
     if request.method == 'POST': 
