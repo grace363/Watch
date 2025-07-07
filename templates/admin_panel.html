@@ -508,7 +508,10 @@
 </td>
 </tr>
 <tr>
+<td>SQLALCHEMY_DATABASE_URI</td>
+<td>{{ config.get('SQLALCHEMY_DATABASE_URI', 'Not Set') }}</td>
 <td>
+<input name="SQLALCHEMY_DATABASE_URI" type="text" value="{{ config.get('SQLALCHEMY_DATABASE_URI', '') }}"/>
 </td>
 </tr>
 <tr>
