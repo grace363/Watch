@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Watch & Earn</title>
+    <title>Scalable Dashboard - Watch & Earn</title>
     <style>
         * {
             margin: 0;
@@ -26,6 +26,9 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .logo {
@@ -63,9 +66,21 @@
             margin-bottom: 2rem;
         }
 
-        .dashboard-header h1 {
-            font-size: 2.5rem;
+        .balance-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem;
+            border-radius: 15px;
+            text-align: center;
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 2rem;
+        }
+
+        .balance-section h2 {
+            font-size: 3rem;
             margin-bottom: 0.5rem;
+            color: #4CAF50;
         }
 
         .stats-grid {
@@ -91,10 +106,6 @@
             color: #4CAF50;
         }
 
-        .stat-card p {
-            opacity: 0.9;
-        }
-
         .videos-section {
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
@@ -103,17 +114,61 @@
             border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
         .section-title {
             color: white;
             font-size: 1.5rem;
-            margin-bottom: 1.5rem;
-            text-align: center;
+        }
+
+        .search-filter-container {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            outline: none;
+            font-size: 1rem;
+            min-width: 200px;
+        }
+
+        .filter-select {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            outline: none;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .sort-select {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 25px;
+            background: rgba(255, 255, 255, 0.9);
+            outline: none;
+            font-size: 1rem;
+            cursor: pointer;
         }
 
         .videos-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .video-card {
@@ -122,6 +177,12 @@
             overflow: hidden;
             transition: transform 0.3s, box-shadow 0.3s;
             position: relative;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .video-card:hover {
@@ -140,11 +201,6 @@
             left: 0;
             z-index: 10;
             border-radius: 0 0 10px 0;
-            display: none;
-        }
-
-        .video-card.sponsored .sponsored-banner {
-            display: block;
         }
 
         .video-thumbnail {
@@ -177,16 +233,18 @@
             color: #333;
         }
 
+        .video-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
         .video-reward {
             color: #4CAF50;
             font-weight: bold;
             margin-bottom: 0.5rem;
-        }
-
-        .video-time {
-            color: #666;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
         }
 
         .watch-btn {
@@ -199,26 +257,78 @@
             font-weight: bold;
             transition: transform 0.2s;
             width: 100%;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
         }
 
         .watch-btn:hover {
             transform: scale(1.05);
-            color: white;
-        }
-
-        .watch-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
         }
 
         .loading {
             text-align: center;
             color: white;
             padding: 2rem;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .pagination button {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: white;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination .current-page {
+            color: white;
+            font-weight: bold;
+        }
+
+        .load-more-btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            display: block;
+            margin: 2rem auto;
+            transition: background 0.3s;
+        }
+
+        .load-more-btn:hover {
+            background: white;
         }
 
         .no-videos {
@@ -228,37 +338,11 @@
             font-size: 1.2rem;
         }
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 15% auto;
-            padding: 20px;
-            border-radius: 10px;
-            width: 80%;
-            max-width: 500px;
-            text-align: center;
-        }
-
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close:hover {
-            color: black;
+        .video-count {
+            color: white;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 1rem;
         }
 
         @media (max-width: 768px) {
@@ -267,17 +351,19 @@
                 gap: 1rem;
             }
 
-            .nav-links {
-                flex-wrap: wrap;
-                justify-content: center;
+            .section-header {
+                flex-direction: column;
+                align-items: stretch;
             }
 
-            .dashboard-header h1 {
-                font-size: 2rem;
+            .search-filter-container {
+                flex-direction: column;
             }
 
-            .stats-grid {
-                grid-template-columns: 1fr;
+            .search-box,
+            .filter-select,
+            .sort-select {
+                min-width: unset;
             }
 
             .videos-grid {
@@ -291,9 +377,9 @@
         <div class="logo">🎬 Watch & Earn</div>
         <div class="nav-links">
             <a href="#dashboard">Dashboard</a>
-            <a href="#earnings">Earnings</a>
-            <a href="#profile">Profile</a>
-            <a href="#logout">Logout</a>
+            <a href="earnings.html">Earnings</a>
+            <a href="profile.html">Profile</a>
+            <a href="#" onclick="logout()">Logout</a>
         </div>
     </nav>
 
@@ -303,11 +389,12 @@
             <p>Start watching videos and earning money today</p>
         </div>
 
+        <div class="balance-section">
+            <h2 id="balance">$0.00</h2>
+            <p>Current Balance</p>
+        </div>
+
         <div class="stats-grid">
-            <div class="stat-card">
-                <h3 id="balance">$0.00</h3>
-                <p>Current Balance</p>
-            </div>
             <div class="stat-card">
                 <h3 id="videos-watched">0</h3>
                 <p>Videos Watched Today</p>
@@ -323,118 +410,252 @@
         </div>
 
         <div class="videos-section">
-            <h2 class="section-title">📺 Available Videos</h2>
-            <div id="videos-container">
-                <div class="loading">Loading videos...</div>
+            <div class="section-header">
+                <h2 class="section-title">📺 Available Videos</h2>
+                <div class="search-filter-container">
+                    <input type="text" class="search-box" placeholder="Search videos..." id="searchInput">
+                    <select class="filter-select" id="categoryFilter">
+                        <option value="">All Categories</option>
+                        <option value="education">Education</option>
+                        <option value="entertainment">Entertainment</option>
+                        <option value="tech">Technology</option>
+                        <option value="cooking">Cooking</option>
+                        <option value="fitness">Fitness</option>
+                        <option value="music">Music</option>
+                    </select>
+                    <select class="sort-select" id="sortSelect">
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="reward_high">Highest Reward</option>
+                        <option value="reward_low">Lowest Reward</option>
+                        <option value="duration_short">Shortest Duration</option>
+                        <option value="duration_long">Longest Duration</option>
+                    </select>
+                </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Watch Video Modal -->
-    <div id="watchModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h2>Ready to Watch?</h2>
-            <p id="modalMessage"></p>
-            <div style="margin-top: 20px;">
-                <button onclick="closeModal()" style="background: #ccc; border: none; padding: 10px 20px; border-radius: 5px; margin-right: 10px; cursor: pointer;">Cancel</button>
-                <button id="confirmWatchBtn" onclick="confirmWatch()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Watch Now</button>
+            <div class="video-count" id="videoCount">Loading videos...</div>
+
+            <div id="videos-container">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading videos...
+                </div>
             </div>
+
+            <div class="pagination" id="pagination" style="display: none;">
+                <button id="prevPage">Previous</button>
+                <span class="current-page">Page <span id="currentPage">1</span> of <span id="totalPages">1</span></span>
+                <button id="nextPage">Next</button>
+            </div>
+
+            <button class="load-more-btn" id="loadMoreBtn" onclick="loadMoreVideos()" style="display: none;">
+                Load More Videos
+            </button>
         </div>
     </div>
 
     <script>
-        // Mock data for demonstration
-        const userData = {
-            balance: 12.45,
-            videosWatchedToday: 8,
-            dailyLimit: 50,
-            totalEarned: 156.78
+        // Configuration
+        const CONFIG = {
+            VIDEOS_PER_PAGE: 12,
+            LOAD_MORE_BATCH: 6,
+            SEARCH_DEBOUNCE: 300,
+            API_BASE_URL: '/api',
+            ENABLE_INFINITE_SCROLL: true
         };
 
-        const videoData = [
-            {
-                id: 1,
-                title: "Amazing Nature Documentary",
-                reward: 0.05,
-                watchTime: 30,
-                thumbnail: "🌿",
-                isSponsored: false,
-                type: "youtube",
-                url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-                added_by: "Admin"
-            },
-            {
-                id: 2,
-                title: "Cooking Tutorial - Easy Recipes",
-                reward: 0.03,
-                watchTime: 25,
-                thumbnail: "🍳",
-                isSponsored: true,
-                type: "youtube",
-                url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-                added_by: "Chef123"
-            },
-            {
-                id: 3,
-                title: "Tech Review - Latest Gadgets",
-                reward: 0.04,
-                watchTime: 35,
-                thumbnail: "📱",
-                isSponsored: false,
-                type: "youtube",
-                url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-                added_by: "TechGuru"
-            },
-            {
-                id: 4,
-                title: "Fitness Workout Routine",
-                reward: 0.06,
-                watchTime: 40,
-                thumbnail: "💪",
-                isSponsored: true,
-                type: "youtube",
-                url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-                added_by: "FitCoach"
-            }
-        ];
+        // State management
+        let currentPage = 1;
+        let totalPages = 1;
+        let totalVideos = 0;
+        let allVideos = [];
+        let filteredVideos = [];
+        let isLoading = false;
+        let searchTimeout;
+        let loadingMore = false;
 
-        let selectedVideoId = null;
+        // Mock data for demonstration (in production, this would come from API)
+        const mockVideos = Array.from({ length: 2500 }, (_, i) => ({
+            id: i + 1,
+            title: `Video ${i + 1}: ${getRandomTitle()}`,
+            reward: +(Math.random() * 0.1 + 0.01).toFixed(3),
+            watchTime: Math.floor(Math.random() * 60 + 15),
+            thumbnail: getRandomEmoji(),
+            isSponsored: Math.random() > 0.7,
+            category: getRandomCategory(),
+            type: "youtube",
+            url: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+            added_by: `User${Math.floor(Math.random() * 100)}`,
+            created_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+            views: Math.floor(Math.random() * 10000)
+        }));
 
-        // Update stats
+        function getRandomTitle() {
+            const titles = [
+                "Amazing Tutorial", "Cooking Guide", "Tech Review", "Fitness Workout",
+                "Music Performance", "Educational Content", "Entertainment Show",
+                "DIY Project", "Travel Vlog", "Gaming Stream", "Art Tutorial",
+                "Business Tips", "Health Advice", "Comedy Sketch", "Documentary"
+            ];
+            return titles[Math.floor(Math.random() * titles.length)];
+        }
+
+        function getRandomEmoji() {
+            const emojis = ["🎬", "📺", "🎵", "🍳", "💪", "🎨", "🎮", "📚", "🌟", "🔥", "💎", "🚀", "🏆", "🎯", "⚡"];
+            return emojis[Math.floor(Math.random() * emojis.length)];
+        }
+
+        function getRandomCategory() {
+            const categories = ["education", "entertainment", "tech", "cooking", "fitness", "music"];
+            return categories[Math.floor(Math.random() * categories.length)];
+        }
+
+        // Initialize dashboard
+        async function init() {
+            updateStats();
+            await loadVideos();
+            setupEventListeners();
+            setupInfiniteScroll();
+        }
+
+        // Update user stats
         function updateStats() {
+            const userData = {
+                balance: 12.45,
+                videosWatchedToday: 8,
+                totalEarned: 156.78
+            };
+
             document.getElementById('balance').textContent = `$${userData.balance.toFixed(2)}`;
             document.getElementById('videos-watched').textContent = userData.videosWatchedToday;
-            document.getElementById('daily-limit').textContent = userData.dailyLimit;
             document.getElementById('total-earned').textContent = `$${userData.totalEarned.toFixed(2)}`;
         }
 
-        // Load videos
-        function loadVideos() {
+        // Simulate API call with pagination
+        async function fetchVideos(page = 1, limit = CONFIG.VIDEOS_PER_PAGE, search = '', category = '', sort = 'newest') {
+            // Simulate API delay
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            let filteredData = [...mockVideos];
+
+            // Apply search filter
+            if (search) {
+                filteredData = filteredData.filter(video => 
+                    video.title.toLowerCase().includes(search.toLowerCase()) ||
+                    video.added_by.toLowerCase().includes(search.toLowerCase())
+                );
+            }
+
+            // Apply category filter
+            if (category) {
+                filteredData = filteredData.filter(video => video.category === category);
+            }
+
+            // Apply sorting
+            switch(sort) {
+                case 'newest':
+                    filteredData.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    break;
+                case 'oldest':
+                    filteredData.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    break;
+                case 'reward_high':
+                    filteredData.sort((a, b) => b.reward - a.reward);
+                    break;
+                case 'reward_low':
+                    filteredData.sort((a, b) => a.reward - b.reward);
+                    break;
+                case 'duration_short':
+                    filteredData.sort((a, b) => a.watchTime - b.watchTime);
+                    break;
+                case 'duration_long':
+                    filteredData.sort((a, b) => b.watchTime - a.watchTime);
+                    break;
+            }
+
+            const total = filteredData.length;
+            const startIndex = (page - 1) * limit;
+            const endIndex = startIndex + limit;
+            const paginatedData = filteredData.slice(startIndex, endIndex);
+
+            return {
+                videos: paginatedData,
+                totalVideos: total,
+                totalPages: Math.ceil(total / limit),
+                currentPage: page,
+                hasMore: endIndex < total
+            };
+        }
+
+        // Load videos with pagination
+        async function loadVideos(page = 1, append = false) {
+            if (isLoading) return;
+            
+            isLoading = true;
+            
+            if (!append) {
+                showLoading();
+            }
+
+            try {
+                const search = document.getElementById('searchInput').value;
+                const category = document.getElementById('categoryFilter').value;
+                const sort = document.getElementById('sortSelect').value;
+
+                const result = await fetchVideos(page, CONFIG.VIDEOS_PER_PAGE, search, category, sort);
+                
+                if (append) {
+                    allVideos = [...allVideos, ...result.videos];
+                } else {
+                    allVideos = result.videos;
+                    currentPage = result.currentPage;
+                }
+
+                totalPages = result.totalPages;
+                totalVideos = result.totalVideos;
+
+                renderVideos(append);
+                updatePagination();
+                updateVideoCount();
+
+            } catch (error) {
+                console.error('Error loading videos:', error);
+                showError('Failed to load videos. Please try again.');
+            } finally {
+                isLoading = false;
+                loadingMore = false;
+            }
+        }
+
+        // Render videos to DOM
+        function renderVideos(append = false) {
             const container = document.getElementById('videos-container');
             
-            if (videoData.length === 0) {
-                container.innerHTML = '<div class="no-videos">No videos available at the moment. Check back later!</div>';
+            if (allVideos.length === 0) {
+                container.innerHTML = '<div class="no-videos">No videos found. Try adjusting your search or filters.</div>';
                 return;
             }
 
-            const videosHTML = videoData.map(video => {
+            const videosHTML = allVideos.map(video => {
                 const sponsoredClass = video.isSponsored ? 'sponsored' : '';
-                const thumbnail = video.type === 'youtube' ? 
-                    `<iframe src="${video.url}" allowfullscreen></iframe>` :
-                    `<div style="font-size: 3rem;">${video.thumbnail}</div>`;
+                const sponsoredBanner = video.isSponsored ? '<div class="sponsored-banner">SPONSORED</div>' : '';
                 
                 return `
                     <div class="video-card ${sponsoredClass}">
-                        <div class="sponsored-banner">SPONSORED</div>
+                        ${sponsoredBanner}
                         <div class="video-thumbnail">
-                            ${thumbnail}
+                            <div style="font-size: 3rem;">${video.thumbnail}</div>
                         </div>
                         <div class="video-info">
                             <div class="video-title">${video.title}</div>
+                            <div class="video-meta">
+                                <span>${video.category}</span>
+                                <span>${video.views} views</span>
+                            </div>
                             <div class="video-reward">💰 Earn $${video.reward.toFixed(3)}</div>
-                            <div class="video-time">⏱️ Watch for ${video.watchTime} seconds</div>
-                            <button class="watch-btn" onclick="showWatchModal(${video.id})">
+                            <div class="video-time">⏱️ ${video.watchTime}s • By ${video.added_by}</div>
+                            <button class="watch-btn" onclick="watchVideo(${video.id})">
                                 🎬 Watch Now
                             </button>
                         </div>
@@ -442,191 +663,165 @@
                 `;
             }).join('');
 
-            container.innerHTML = `<div class="videos-grid">${videosHTML}</div>`;
-        }
-
-        // Show watch modal
-        function showWatchModal(videoId) {
-            const video = videoData.find(v => v.id === videoId);
-            if (!video) return;
-
-            // Check daily limit
-            if (userData.videosWatchedToday >= userData.dailyLimit) {
-                alert('You have reached your daily video limit. Come back tomorrow!');
-                return;
+            if (append) {
+                const existingGrid = container.querySelector('.videos-grid');
+                if (existingGrid) {
+                    existingGrid.innerHTML += videosHTML;
+                } else {
+                    container.innerHTML = `<div class="videos-grid">${videosHTML}</div>`;
+                }
+            } else {
+                container.innerHTML = `<div class="videos-grid">${videosHTML}</div>`;
             }
 
-            selectedVideoId = videoId;
-            document.getElementById('modalMessage').innerHTML = `
-                <strong>${video.title}</strong><br>
-                Reward: $${video.reward.toFixed(3)}<br>
-                Watch Time: ${video.watchTime} seconds<br>
-                Added by: ${video.added_by}
+            // Update load more button
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (CONFIG.ENABLE_INFINITE_SCROLL && allVideos.length < totalVideos) {
+                loadMoreBtn.style.display = 'block';
+            } else {
+                loadMoreBtn.style.display = 'none';
+            }
+        }
+
+        // Load more videos (infinite scroll)
+        async function loadMoreVideos() {
+            if (loadingMore || allVideos.length >= totalVideos) return;
+            
+            loadingMore = true;
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            loadMoreBtn.textContent = 'Loading...';
+            
+            const nextBatchPage = Math.ceil(allVideos.length / CONFIG.VIDEOS_PER_PAGE) + 1;
+            await loadVideos(nextBatchPage, true);
+            
+            loadMoreBtn.textContent = 'Load More Videos';
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Search with debounce
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentPage = 1;
+                    loadVideos(1, false);
+                }, CONFIG.SEARCH_DEBOUNCE);
+            });
+
+            // Category filter
+            document.getElementById('categoryFilter').addEventListener('change', () => {
+                currentPage = 1;
+                loadVideos(1, false);
+            });
+
+            // Sort filter
+            document.getElementById('sortSelect').addEventListener('change', () => {
+                currentPage = 1;
+                loadVideos(1, false);
+            });
+
+            // Pagination
+            document.getElementById('prevPage').addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadVideos(currentPage, false);
+                    scrollToTop();
+                }
+            });
+
+            document.getElementById('nextPage').addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadVideos(currentPage, false);
+                    scrollToTop();
+                }
+            });
+        }
+
+        // Setup infinite scroll
+        function setupInfiniteScroll() {
+            if (!CONFIG.ENABLE_INFINITE_SCROLL) return;
+
+            window.addEventListener('scroll', () => {
+                if (loadingMore || allVideos.length >= totalVideos) return;
+
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const scrollHeight = document.documentElement.scrollHeight;
+                const clientHeight = document.documentElement.clientHeight;
+
+                if (scrollTop + clientHeight >= scrollHeight - 1000) {
+                    loadMoreVideos();
+                }
+            });
+        }
+
+        // Update pagination controls
+        function updatePagination() {
+            if (!CONFIG.ENABLE_INFINITE_SCROLL) {
+                document.getElementById('pagination').style.display = 'flex';
+                document.getElementById('currentPage').textContent = currentPage;
+                document.getElementById('totalPages').textContent = totalPages;
+                document.getElementById('prevPage').disabled = currentPage === 1;
+                document.getElementById('nextPage').disabled = currentPage === totalPages;
+            } else {
+                document.getElementById('pagination').style.display = 'none';
+            }
+        }
+
+        // Update video count
+        function updateVideoCount() {
+            const countElement = document.getElementById('videoCount');
+            if (totalVideos === 0) {
+                countElement.textContent = 'No videos found';
+            } else {
+                countElement.textContent = `Showing ${allVideos.length} of ${totalVideos} videos`;
+            }
+        }
+
+        // Show loading state
+        function showLoading() {
+            document.getElementById('videos-container').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading videos...
+                </div>
             `;
-            document.getElementById('watchModal').style.display = 'block';
         }
 
-        // Close modal
-        function closeModal() {
-            document.getElementById('watchModal').style.display = 'none';
-            selectedVideoId = null;
+        // Show error message
+        function showError(message) {
+            document.getElementById('videos-container').innerHTML = `
+                <div class="no-videos">
+                    <p>${message}</p>
+                    <button onclick="loadVideos(1, false)" style="margin-top: 1rem; padding: 0.5rem 1rem; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
         }
 
-        // Confirm watch - this will redirect to watch_video.html
-        function confirmWatch() {
-            if (!selectedVideoId) return;
-
-            // In a real Flask app, this would redirect to the watch video route
-            // For demonstration, we'll simulate the redirect
-            
-            // This is what the actual redirect would look like in a Flask app:
-            // window.location.href = `/watch_video/${selectedVideoId}`;
-            
-            // For this demo, we'll create a watch video page URL
-            const video = videoData.find(v => v.id === selectedVideoId);
-            const watchUrl = createWatchVideoUrl(video);
-            
-            // Open in new tab for demo purposes
-            window.open(watchUrl, '_blank');
-            closeModal();
+        // Watch video function
+        function watchVideo(videoId) {
+            console.log(`Watching video ${videoId}`);
+            // In production, this would redirect to watch page
+            alert(`Starting video ${videoId}...`);
         }
 
-        // Create watch video URL (demo function)
-        function createWatchVideoUrl(video) {
-            // In a real Flask app, this would be handled by the backend
-            // For demo purposes, we'll create a data URL with the watch video HTML
-            const watchVideoHTML = generateWatchVideoHTML(video);
-            return 'data:text/html;charset=utf-8,' + encodeURIComponent(watchVideoHTML);
+        // Scroll to top
+        function scrollToTop() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // Generate watch video HTML (demo function)
-        function generateWatchVideoHTML(video) {
-            return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${video.title} - Watch & Earn</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: #0f0f0f; color: white; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background: #000; border-radius: 10px; }
-        .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-        .timer { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 5px; }
-        .info { background: #1a1a1a; padding: 20px; border-radius: 10px; margin: 20px 0; text-align: center; }
-        .progress-bar { width: 100%; height: 10px; background: #333; border-radius: 5px; overflow: hidden; margin: 10px 0; }
-        .progress-fill { height: 100%; background: #4CAF50; transition: width 0.3s; width: 0%; }
-        .claim-btn { background: #4CAF50; color: white; border: none; padding: 15px 30px; border-radius: 25px; font-size: 16px; cursor: pointer; display: none; }
-        .back-btn { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-bottom: 20px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <button class="back-btn" onclick="window.close()">← Back to Dashboard</button>
-        
-        <div class="info">
-            <h1>${video.title}</h1>
-            <p>Watch for ${video.watchTime} seconds to earn $${video.reward.toFixed(3)}</p>
-            <p>Added by: ${video.added_by}</p>
-        </div>
-        
-        <div class="video-wrapper">
-            <iframe src="${video.url}?autoplay=1" allowfullscreen></iframe>
-            <div class="timer">
-                <span id="timeLeft">${video.watchTime}</span>s
-            </div>
-        </div>
-        
-        <div class="info">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressBar"></div>
-            </div>
-            <p>Progress: <span id="progress">0</span>%</p>
-            <button class="claim-btn" id="claimBtn" onclick="claimReward()">Claim $${video.reward.toFixed(3)}</button>
-        </div>
-    </div>
-    
-    <script>
-        let timeLeft = ${video.watchTime};
-        let watchTime = 0;
-        
-        const timer = setInterval(() => {
-            watchTime++;
-            timeLeft--;
-            
-            document.getElementById('timeLeft').textContent = timeLeft;
-            const progress = (watchTime / ${video.watchTime}) * 100;
-            document.getElementById('progress').textContent = Math.round(progress);
-            document.getElementById('progressBar').style.width = progress + '%';
-            
-            if (timeLeft <= 0) {
-                clearInterval(timer);
-                document.getElementById('claimBtn').style.display = 'block';
-                document.getElementById('timeLeft').textContent = '0';
-            }
-        }, 1000);
-        
-        function claimReward() {
-            alert('Congratulations! You earned $${video.reward.toFixed(3)}!');
-            window.close();
-        }
-    </script>
-</body>
-</html>`;
-        }
-
-        // Initialize dashboard
-        function init() {
-            updateStats();
-            loadVideos();
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('watchModal');
-            if (event.target == modal) {
-                closeModal();
+        // Logout function
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                alert('Logged out successfully!');
+                // In production: window.location.href = '/logout';
             }
         }
 
-        // Load dashboard when page loads
+        // Initialize when page loads
         window.addEventListener('load', init);
-
-        // Fetch real data from backend (uncomment these in production)
-        /*
-        async function fetchUserData() {
-            try {
-                const response = await fetch('/api/user_stats');
-                if (response.ok) {
-                    const data = await response.json();
-                    userData.balance = data.balance || 0;
-                    userData.videosWatchedToday = data.videos_watched_today || 0;
-                    userData.totalEarned = data.total_earnings || 0;
-                    updateStats();
-                }
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-            }
-        }
-
-        async function fetchVideos() {
-            try {
-                const response = await fetch('/api/videos');
-                if (response.ok) {
-                    const videos = await response.json();
-                    videoData.splice(0, videoData.length, ...videos);
-                    loadVideos();
-                }
-            } catch (error) {
-                console.error('Error fetching videos:', error);
-            }
-        }
-
-        // Uncomment these lines to fetch real data
-        // fetchUserData();
-        // fetchVideos();
-        */
     </script>
 </body>
 </html>
