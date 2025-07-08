@@ -873,10 +873,7 @@ def upload_sponsored():
 
 
 
-@app.route('/admin/settings')
-def admin_settings():
-    config_states = {key: str(app.config.get(key, '')) for key in app.config}
-    return render_template('admin_settings.html', config_states=config_states)
+
 
 
 @app.route('/admin/reset_user_password', methods=['POST'])
@@ -901,16 +898,3 @@ else:
     # For production deployment (like Render)
     # Initialize database when app is imported
     init_db()
-
-
-
-
-
-
-
-
-
-@app.route('/admin/settings')
-def admin_settings():
-    config_states = {key: str(app.config.get(key, '')) for key in app.config}
-    return render_template('admin_settings.html', config_states=config_states)
