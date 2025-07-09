@@ -20,6 +20,12 @@ import logging
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, JSON
 import math
 
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, flash
+from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.utils import secure_filename
+from urllib.parse import urlparse, parse_qs
+import re
+
 
 #==== Flask App Config ====
 
@@ -40,7 +46,15 @@ else:
 #==== Database Configuration ====
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///watch_and_earn.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
+
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
 db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+
+
 
 #==== Environment Config ====
 
@@ -496,7 +510,41 @@ class HoneypotInteraction(db.Model):
     automatic_ban = db.Column(db.Boolean, default=True)  # Auto-ban on honeypot interaction
     
     user = db.relationship('User', backref=db.backref('honeypot_interactions', lazy=True))
+
+
+
+# Helper Functions
+def extract_video_id(url):
+    """Extract video ID from YouTube URL"""
+    patterns = [
+        r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)',
+        r'youtube\.com\/v\/([^&\n?#]+)'
+    ]
     
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+def get_youtube_embed_url(video_url):
+    """Convert YouTube URL to embed format"""
+    video_id = extract_video_id(video_url)
+    if video_id:
+        return f"https://www.youtube.com/embed/{video_id}"
+    return video_url
+
+def get_youtube_thumbnail(video_url):
+    """Get YouTube thumbnail URL"""
+    video_id = extract_video_id(video_url)
+    if video_id:
+        return f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+    return None
+
+
+
+
+
 #==== Anti-Cheat Utility Functions ====
 
 def reset_daily_data_if_needed(user):
@@ -940,6 +988,261 @@ The Watch & Earn Team
     """
     
     return text_body, html_body
+
+
+@app.route('/admin/login')
+def admin_login():
+    return render_template('admin_login.html')
+
+@app.route('/admin/dashboard')
+def admin_dashboard():
+    # In production, add proper authentication
+    videos = Video.query.order_by(Video.created_at.desc()).all()
+    return render_template('admin_dashboard.html', videos=videos)
+
+@app.route('/admin/upload', methods=['GET', 'POST'])
+def admin_upload():
+    if request.method == 'POST':
+        try:
+            # Get form data
+            title = request.form.get('title')
+            description = request.form.get('description', '')
+            video_url = request.form.get('video_url')
+            category = request.form.get('category')
+            reward = float(request.form.get('reward', 0.01))
+            watch_time = int(request.form.get('watch_time', 30))
+            is_sponsored = request.form.get('is_sponsored') == 'on'
+            
+            # Validate required fields
+            if not all([title, video_url, category]):
+                flash('Please fill in all required fields', 'error')
+                return redirect(url_for('admin_upload'))
+            
+            # Process video URL
+            embed_url = get_youtube_embed_url(video_url)
+            thumbnail_url = get_youtube_thumbnail(video_url)
+            
+            # Create new video
+            new_video = Video(
+                title=title,
+                description=description,
+                video_url=embed_url,
+                thumbnail_url=thumbnail_url,
+                category=category,
+                reward=reward,
+                watch_time=watch_time,
+                is_sponsored=is_sponsored,
+                added_by='Admin'
+            )
+            
+            db.session.add(new_video)
+            db.session.commit()
+            
+            # Emit real-time update to all connected users
+            video_data = {
+                'id': new_video.id,
+                'title': new_video.title,
+                'description': new_video.description,
+                'video_url': new_video.video_url,
+                'thumbnail_url': new_video.thumbnail_url,
+                'category': new_video.category,
+                'reward': new_video.reward,
+                'watch_time': new_video.watch_time,
+                'is_sponsored': new_video.is_sponsored,
+                'views': new_video.views,
+                'added_by': new_video.added_by,
+                'created_at': new_video.created_at.isoformat()
+            }
+            
+            socketio.emit('video_added', video_data, room='users')
+            
+            flash('Video uploaded successfully!', 'success')
+            return redirect(url_for('admin_dashboard'))
+            
+        except Exception as e:
+            flash(f'Error uploading video: {str(e)}', 'error')
+            return redirect(url_for('admin_upload'))
+    
+    return render_template('admin_upload.html')
+
+@app.route('/admin/delete/<int:video_id>', methods=['POST'])
+def admin_delete_video(video_id):
+    try:
+        video = Video.query.get_or_404(video_id)
+        video_data = {
+            'id': video.id,
+            'title': video.title
+        }
+        
+        db.session.delete(video)
+        db.session.commit()
+        
+        # Emit real-time update to all connected users
+        socketio.emit('video_deleted', video_data, room='users')
+        
+        flash('Video deleted successfully!', 'success')
+        return jsonify({'success': True, 'message': 'Video deleted successfully'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/dashboard')
+def user_dashboard():
+    return render_template('user_dashboard.html')
+
+@app.route('/api/videos')
+def api_videos():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 12, type=int)
+    search = request.args.get('search', '')
+    category = request.args.get('category', '')
+    sort = request.args.get('sort', 'newest')
+    
+    # Base query
+    query = Video.query.filter_by(is_active=True)
+    
+    # Apply search filter
+    if search:
+        query = query.filter(
+            db.or_(
+                Video.title.contains(search),
+                Video.description.contains(search),
+                Video.added_by.contains(search)
+            )
+        )
+    
+    # Apply category filter
+    if category:
+        query = query.filter_by(category=category)
+    
+    # Apply sorting
+    if sort == 'newest':
+        query = query.order_by(Video.created_at.desc())
+    elif sort == 'oldest':
+        query = query.order_by(Video.created_at.asc())
+    elif sort == 'reward_high':
+        query = query.order_by(Video.reward.desc())
+    elif sort == 'reward_low':
+        query = query.order_by(Video.reward.asc())
+    elif sort == 'duration_short':
+        query = query.order_by(Video.watch_time.asc())
+    elif sort == 'duration_long':
+        query = query.order_by(Video.watch_time.desc())
+    
+    # Paginate
+    videos = query.paginate(
+        page=page, 
+        per_page=per_page, 
+        error_out=False
+    )
+    
+    # Format response
+    video_list = []
+    for video in videos.items:
+        video_data = {
+            'id': video.id,
+            'title': video.title,
+            'description': video.description,
+            'video_url': video.video_url,
+            'thumbnail_url': video.thumbnail_url,
+            'category': video.category,
+            'reward': video.reward,
+            'watch_time': video.watch_time,
+            'is_sponsored': video.is_sponsored,
+            'views': video.views,
+            'added_by': video.added_by,
+            'created_at': video.created_at.isoformat()
+        }
+        video_list.append(video_data)
+    
+    return jsonify({
+        'videos': video_list,
+        'total_videos': videos.total,
+        'total_pages': videos.pages,
+        'current_page': videos.page,
+        'has_more': videos.has_next
+    })
+
+@app.route('/api/user/stats')
+def api_user_stats():
+    # Mock user stats - in production, get from authenticated user
+    return jsonify({
+        'balance': 12.45,
+        'videos_watched_today': 8,
+        'total_earned': 156.78,
+        'daily_limit': 50
+    })
+
+# WebSocket Events
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    join_room('users')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+    leave_room('users')
+
+@socketio.on('join_admin')
+def handle_join_admin():
+    join_room('admin')
+
+@socketio.on('leave_admin')
+def handle_leave_admin():
+    leave_room('admin')
+
+# Initialize database
+@app.before_first_request
+def create_tables():
+    db.create_all()
+    
+    # Create sample data if database is empty
+    if Video.query.count() == 0:
+        categories = ['education', 'entertainment', 'tech', 'cooking', 'fitness', 'music']
+        sample_videos = [
+            {
+                'title': 'Python Programming Tutorial',
+                'description': 'Learn Python from scratch',
+                'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                'category': 'education',
+                'reward': 0.05,
+                'watch_time': 120,
+                'is_sponsored': False
+            },
+            {
+                'title': 'Cooking Masterclass',
+                'description': 'Professional cooking techniques',
+                'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                'category': 'cooking',
+                'reward': 0.03,
+                'watch_time': 90,
+                'is_sponsored': True
+            },
+            {
+                'title': 'Fitness Workout',
+                'description': '30-minute full body workout',
+                'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                'category': 'fitness',
+                'reward': 0.04,
+                'watch_time': 60,
+                'is_sponsored': False
+            }
+        ]
+        
+        for video_data in sample_videos:
+            video = Video(**video_data)
+            db.session.add(video)
+        
+        db.session.commit()
+
+
+
+
+
+
+
+
 
 #==== Routes ====
 
