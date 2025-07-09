@@ -1085,9 +1085,6 @@ def admin_delete_video(video_id):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/dashboard')
-def user_dashboard():
-    return render_template('user_dashboard.html')
 
 @app.route('/api/videos')
 def api_videos():
