@@ -324,13 +324,14 @@ class Video(db.Model):
     reward_amount = db.Column(db.Float, default=VIDEO_REWARD_AMOUNT)
     url = db.Column(db.String(500), nullable=False)
 
+    category = db.Column(db.String(100), nullable=True)
     description = db.Column(db.Text)  # Add this line if you want to store descriptions
     thumbnail = db.Column(db.String(500))
     duration = db.Column(db.String(50))
     views = db.Column(db.Integer, default=0)
     likes = db.Column(db.Integer, default=0)
     upload_date = db.Column(db.DateTime, default=datetime.utcnow)
-
+    
     
     # Add relationship
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
