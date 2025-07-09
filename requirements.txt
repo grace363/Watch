@@ -13,5 +13,5 @@ psycopg2-binary
 Flask-WTF==1.1.1
 flask-socketio==5.3.6
 python-socketio==5.9.0
-python-engeneio==4.7.1
-eventlet
+python-engineio==4.7.1
+eventlet==0.33.3
