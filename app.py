@@ -315,13 +315,22 @@ class WithdrawalRequest(db.Model):
 
 class Video(db.Model): 
     id = db.Column(db.Integer, primary_key=True) 
-    title = db.Column(db.String(200), nullable=False) 
+    title = 2= db.Column(db.String(200), nullable=False) 
     video_url = db.Column(db.String(500), nullable=False) 
     added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
     min_watch_time = db.Column(db.Integer, default=VIDEO_WATCH_TIME)  # seconds
     reward_amount = db.Column(db.Float, default=VIDEO_REWARD_AMOUNT)
+    url = db.Column(db.String(500), nullable=False)
+
+    description = db.Column(db.Text)  # Add this line if you want to store descriptions
+    thumbnail = db.Column(db.String(500))
+    duration = db.Column(db.String(50))
+    views = db.Column(db.Integer, default=0)
+    likes = db.Column(db.Integer, default=0)
+    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
+
     
     # Add relationship
     uploader = db.relationship('User', backref=db.backref('videos', lazy=True))
