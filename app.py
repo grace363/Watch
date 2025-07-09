@@ -1192,48 +1192,54 @@ def handle_leave_admin():
     leave_room('admin')
 
 # Initialize database
-@app.before_first_request
+tables_created = False
+
+@app.before_request
 def create_tables():
-    db.create_all()
-    
-    # Create sample data if database is empty
-    if Video.query.count() == 0:
-        categories = ['education', 'entertainment', 'tech', 'cooking', 'fitness', 'music']
-        sample_videos = [
-            {
-                'title': 'Python Programming Tutorial',
-                'description': 'Learn Python from scratch',
-                'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-                'category': 'education',
-                'reward': 0.05,
-                'watch_time': 120,
-                'is_sponsored': False
-            },
-            {
-                'title': 'Cooking Masterclass',
-                'description': 'Professional cooking techniques',
-                'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-                'category': 'cooking',
-                'reward': 0.03,
-                'watch_time': 90,
-                'is_sponsored': True
-            },
-            {
-                'title': 'Fitness Workout',
-                'description': '30-minute full body workout',
-                'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-                'category': 'fitness',
-                'reward': 0.04,
-                'watch_time': 60,
-                'is_sponsored': False
-            }
-        ]
+    global tables_created
+    if not tables_created:
+        db.create_all()
         
-        for video_data in sample_videos:
-            video = Video(**video_data)
-            db.session.add(video)
+        # Create sample data if database is empty
+        if Video.query.count() == 0:
+            categories = ['education', 'entertainment', 'tech', 'cooking', 'fitness', 'music']
+            sample_videos = [
+                {
+                    'title': 'Python Programming Tutorial',
+                    'description': 'Learn Python from scratch',
+                    'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    'category': 'education',
+                    'reward': 0.05,
+                    'watch_time': 120,
+                    'is_sponsored': False
+                },
+                {
+                    'title': 'Cooking Masterclass',
+                    'description': 'Professional cooking techniques',
+                    'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    'category': 'cooking',
+                    'reward': 0.03,
+                    'watch_time': 90,
+                    'is_sponsored': True
+                },
+                {
+                    'title': 'Fitness Workout',
+                    'description': '30-minute full body workout',
+                    'video_url': 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+                    'category': 'fitness',
+                    'reward': 0.04,
+                    'watch_time': 60,
+                    'is_sponsored': False
+                }
+            ]
+            
+            for video_data in sample_videos:
+                video = Video(**video_data)
+                db.session.add(video)
+            
+            db.session.commit()
         
-        db.session.commit()
+        tables_created = True
 
 
 
