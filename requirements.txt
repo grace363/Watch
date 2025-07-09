@@ -12,4 +12,3 @@ python-dotenv==1.0.0
 psycopg2-binary
 Flask-WTF==1.1.1
 flask-socketio==5.3.6
-eventlet==0.33.3
