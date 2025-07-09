@@ -315,7 +315,7 @@ class WithdrawalRequest(db.Model):
 
 class Video(db.Model): 
     id = db.Column(db.Integer, primary_key=True) 
-    title = 2= db.Column(db.String(200), nullable=False) 
+    title = db.Column(db.String(200), nullable=False) 
     video_url = db.Column(db.String(500), nullable=False) 
     added_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False) 
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
