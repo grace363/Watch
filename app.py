@@ -1064,27 +1064,6 @@ def admin_upload():
     
     return render_template('admin_upload.html')
 
-@app.route('/admin/delete/<int:video_id>', methods=['POST'])
-def admin_delete_video(video_id):
-    try:
-        video = Video.query.get_or_404(video_id)
-        video_data = {
-            'id': video.id,
-            'title': video.title
-        }
-        
-        db.session.delete(video)
-        db.session.commit()
-        
-        # Emit real-time update to all connected users
-        socketio.emit('video_deleted', video_data, room='users')
-        
-        flash('Video deleted successfully!', 'success')
-        return jsonify({'success': True, 'message': 'Video deleted successfully'})
-        
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)}), 500
-
 
 @app.route('/api/videos')
 def api_videos():
